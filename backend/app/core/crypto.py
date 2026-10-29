@@ -40,6 +40,7 @@ class ErroCriptografia(Exception):
 class FinalidadeHash(StrEnum):
     CPF = "cpf"
     EMAIL = "email"
+    CODIGO_RECUPERACAO = "codigo_recuperacao"
 
 
 @dataclass(frozen=True)
@@ -179,6 +180,8 @@ def normalizar(finalidade: FinalidadeHash, valor: str) -> str:
             normalizado = re.sub(r"\D", "", valor)
         case FinalidadeHash.EMAIL:
             normalizado = valor.strip().lower()
+        case FinalidadeHash.CODIGO_RECUPERACAO:
+            normalizado = re.sub(r"[\s-]", "", valor).upper()
         case _:  # pragma: no cover
             assert_never(finalidade)
     if not normalizado:
