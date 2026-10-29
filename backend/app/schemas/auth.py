@@ -51,6 +51,7 @@ class SessaoResposta(BaseModel):
     autenticado: Literal[True] = True
     expira_em: datetime
     troca_senha_obrigatoria: bool
+    permissoes: list[str]  # para a interface; a autorização real é sempre no backend
 
 
 class TrocaSenhaEntrada(_Entrada):

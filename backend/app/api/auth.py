@@ -15,6 +15,7 @@ from app.schemas.auth import (
     TrocaSenhaEntrada,
 )
 from app.services import auth as auth_service
+from app.services import autorizacao
 from app.services import sessao as sessao_svc
 from app.services import usuario as usuario_service
 from app.services.auditoria import ContextoRequisicao
@@ -58,6 +59,7 @@ def sessao(atual: Sessao, db: Db, response: Response) -> SessaoResposta:
     return SessaoResposta(
         expira_em=atual.expira_em,
         troca_senha_obrigatoria=bool(usuario and usuario.troca_senha_obrigatoria),
+        permissoes=sorted(autorizacao.permissoes(db, atual.cpf_hash)),
     )
 
 

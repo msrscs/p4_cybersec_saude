@@ -1,14 +1,19 @@
-"""Dependências HTTP: sessão autenticada e cookies de autenticação."""
+"""Dependências HTTP: sessão autenticada, autorização RBAC e cookies de autenticação."""
 
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, Response, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.database import get_db
+from app.core.requisicao import contexto_requisicao
 from app.repositories import usuario as usuario_repo
+from app.services import autorizacao
 from app.services import sessao as sessao_svc
+from app.services.auditoria import ContextoRequisicao
+from app.services.autorizacao import Permissao
 from app.services.sessao import SessaoAtual
 
 COOKIE_PRE_AUTH = "pre_auth"
@@ -69,3 +74,31 @@ def usuario_liberado(atual: Sessao, db: Db) -> SessaoAtual:
 
 
 SessaoLiberada = Annotated[SessaoAtual, Depends(usuario_liberado)]
+
+
+def exigir(permissao: Permissao) -> Callable[..., SessaoAtual]:
+    """Dependência de rota: sessão liberada + permissão RBAC, verificada a cada requisição."""
+
+    def dependencia(
+        request: Request,
+        atual: SessaoLiberada,
+        db: Db,
+        ctx: Annotated[ContextoRequisicao, Depends(contexto_requisicao)],
+    ) -> SessaoAtual:
+        if autorizacao.tem_permissao(db, atual.cpf_hash, permissao):
+            return atual
+        _auditar_negado(request, atual.cpf_hash, permissao, ctx)
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Acesso negado.")
+
+    return dependencia
+
+
+def _auditar_negado(
+    request: Request, cpf_hash: bytes, permissao: Permissao, ctx: ContextoRequisicao
+) -> None:
+    # Transação própria: o 403 desfaz a transação da requisição, mas a negativa tem de ficar
+    # no log. Seguro contra espera circular no lock da cadeia porque, neste ponto, a
+    # transação da requisição ainda não gravou nenhum evento.
+    fabrica: sessionmaker[Session] = request.app.state.sessionmaker
+    with fabrica() as db, db.begin():
+        autorizacao.registrar_negado(db, cpf_hash, permissao, ctx)
