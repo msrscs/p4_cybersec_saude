@@ -35,6 +35,10 @@ services:
       APP_DB_PASSWORD: ${APP_DB_PASSWORD:?defina APP_DB_PASSWORD no .env}
       DB_HOST: db
       DB_PORT: "5432"
+      # Chaves de criptografia (ADR-0004): só no ambiente, nunca no banco.
+      KEK_KEYRING: ${KEK_KEYRING:?defina KEK_KEYRING no .env (scripts.gerar_chaves)}
+      KEK_ATIVA: ${KEK_ATIVA:?defina KEK_ATIVA no .env}
+      HMAC_KEY: ${HMAC_KEY:?defina HMAC_KEY no .env}
     networks: [internal]          # sem porta publicada: só o frontend fala com a API
     depends_on:
       db:

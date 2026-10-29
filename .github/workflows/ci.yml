@@ -49,6 +49,11 @@ jobs:
           echo "APP_DB_PASSWORD=$(cat /tmp/app_pw)" >> "$GITHUB_ENV"
           echo "MIGRATOR_DB_PASSWORD=$(cat /tmp/mig_pw)" >> "$GITHUB_ENV"
           rm /tmp/app_pw /tmp/mig_pw
+      - name: Gera chaves de criptografia aleatórias para esta execução
+        run: |
+          kek=$(openssl rand -base64 32); hmac=$(openssl rand -base64 32)
+          echo "::add-mask::$kek"; echo "::add-mask::$hmac"
+          { echo "KEK_KEYRING=1:$kek"; echo "KEK_ATIVA=1"; echo "HMAC_KEY=$hmac"; } >> "$GITHUB_ENV"
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           version: "0.13.6"
@@ -59,6 +64,8 @@ jobs:
       - run: uv run mypy .
       - run: uv run bandit -r app scripts
       - run: uv run pytest
+      - name: Cobertura mínima nos módulos críticos (cripto)
+        run: uv run coverage report --include="app/core/crypto.py" --fail-under=95
       - run: uv run pip-audit
 
   frontend:
