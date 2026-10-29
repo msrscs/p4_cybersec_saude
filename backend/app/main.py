@@ -17,4 +17,3 @@ def create_app() -> FastAPI:
     register_error_handlers(app)
     app.include_router(health.router)
     return app
-
