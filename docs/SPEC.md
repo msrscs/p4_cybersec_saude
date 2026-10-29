@@ -48,7 +48,7 @@ Dados do paciente.
 **RF-04 Consulta de logs de auditoria (auditor)**
 Log WORM do Sistema. Logar tudo.
 - [ ] Somente leitura, com filtros por data/usuário/acao
-- [ ] Verificação de integridade da cadeia de hashes
+- [x] Verificação de integridade da cadeia de hashes
 - [ ] Dados sensíveis devem está criptografados ou hash.
 - [ ] Tabela: [log] Campos: [id_log, acao, resumo_acessado, ip_origem, request_id, geolocaliacao, data_hora, hash_assinatura_worm, cpf_paciente_hash, cpf_usuario_hash, id_oci]
 
@@ -149,7 +149,7 @@ Cada tarefa deve ser pequena, testável e entregar valor.
 - [x] T03 Módulo de criptografia (AES-GCM + envelope) com testes
 - [x] T04 Cadastro e login (bcrypt, etapa CPF + senha)
 - [x] T05 MFA TOTP + códigos de recuperação
-- [ ] T06 Auditoria com hash encadeado + verificação
+- [x] T06 Auditoria com hash encadeado + verificação
 - [ ] T07 Funcionalidade principal (RF-03)
 - [ ] T08 Frontend: telas de login/MFA/principal
 - [ ] T09 Hardening (headers, rate limit, CSRF)

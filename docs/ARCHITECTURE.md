@@ -89,14 +89,16 @@ Regras (ADR-0002, 0008, 0009): token temporário só vale para a etapa MFA; sess
 
 - Tabela `log` (schema `app`) **append-only**: triggers bloqueiam `UPDATE`, `DELETE` e `TRUNCATE`.
 - Role da aplicação (`app_user`) com **apenas INSERT e SELECT** na tabela. Migrations rodam com outra role.
-- **Hash encadeado:** `hash = SHA-256(conteudo + prev_hash)`. Alterar um registro quebra todos os seguintes.
-- Endpoint/job de **verificação da cadeia** para detectar adulteração.
+- **Hash encadeado** (ADR-0010): a trigger `log_encadear` calcula `hash = SHA-256(prev_hash + conteúdo)` sob lock, na ordem de `seq_cadeia`. Alterar um registro quebra todos os seguintes.
+- **Verificação da cadeia:** `scripts.verificar_log` recalcula tudo em Python (sem confiar na função do banco); o endpoint para o auditor vem com o RBAC.
+- **Checkpoints assinados** (`log_checkpoint`, HMAC com chave fora do banco) e **âncora** impressa para guardar fora do sistema: revelam a remoção do fim do log.
 - Opcional (nível avançado): exportar periodicamente para armazenamento com *object lock*.
 - Nenhum dado sensível dentro do log.
 
 Esquema base:
 ```
-log(id_log, data_hora, acao, resumo_acessado, ip_origem, request_id, geolocalizacao, cpf_usuario_hash, cpf_paciente_hash, id_oci, prev_hash, hash_assinatura_worm)
+log(id_log, data_hora, acao, resumo_acessado, ip_origem, request_id, geolocalizacao, cpf_usuario_hash, cpf_paciente_hash, id_oci, seq_cadeia, prev_hash, hash_assinatura_worm)
+log_checkpoint(id_checkpoint, criado_em, seq_cadeia, hash_cadeia, assinatura)
 ```
 
 ## 7. Controle de acesso

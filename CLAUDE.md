@@ -41,7 +41,7 @@ Acadêmico de Segurança da Informação. Segurança vem antes de funcionalidade
 - Tabela `log` (schema `app`) append-only: triggers bloqueiam UPDATE, DELETE e TRUNCATE.
 - A role da aplicação só tem INSERT e SELECT nessa tabela.
 - Cada registro guarda `prev_hash` e `hash_assinatura_worm` (SHA-256 do conteúdo + prev_hash) para detectar adulteração.
-- Deve existir um job/endpoint de verificação da cadeia de hashes.
+- Verificação da cadeia (ADR-0010): `cd backend && uv run --env-file ../.env python -m scripts.verificar_log --checkpoint`.
 - Eventos obrigatórios: login (sucesso/falha), MFA, troca de senha, acesso a dado sensível, mudança de permissão.
 - Nunca incluir dado sensível no conteúdo do log.
 

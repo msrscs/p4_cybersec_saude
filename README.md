@@ -10,7 +10,7 @@ Docker, [uv](https://docs.astral.sh/uv/) e Node.js 26.
 ## Primeira configuração do banco
 ```bash
 cp .env.example .env                      # preencha os valores (POSTGRES_USER != app_user/migrator)
-cd backend && uv run python -m scripts.gerar_chaves && cd ..   # KEK + HMAC_KEY no .env (sem exibir)
+cd backend && uv run python -m scripts.gerar_chaves && cd ..   # KEK, HMAC_KEY e LOG_CHECKPOINT_KEY no .env (sem exibir)
 docker compose up -d db
 cd backend && uv run --env-file ../.env python -m scripts.bootstrap_db   # cria roles e schema
 cd .. && uv run --project backend --env-file .env alembic upgrade head   # aplica migrations
@@ -23,6 +23,12 @@ cd backend && uv run --env-file ../.env python -m scripts.criar_usuario \
 - **Esqueceu a senha ou perdeu o celular e os códigos:** um administrador roda
   `cd backend && uv run --env-file ../.env python -m scripts.resetar_acesso --cpf ...`,
   que gera uma senha temporária (mostrada uma vez); o usuário recadastra o MFA e troca a senha.
+
+## Integridade do log de auditoria
+```bash
+cd backend && uv run --env-file ../.env python -m scripts.verificar_log --checkpoint
+```
+Recalcula a cadeia de hashes inteira, grava um checkpoint assinado e imprime a **âncora** (`seq:hash`): guarde-a fora do sistema e confira depois com `--ancora seq:hash`. Sai com código 1 se detectar adulteração (ADR-0010).
 
 ## Subir o ambiente
 ```bash
