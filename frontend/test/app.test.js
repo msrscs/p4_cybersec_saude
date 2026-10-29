@@ -35,12 +35,24 @@ describe('frontend', () => {
     assert.equal(res.headers.get('x-powered-by'), null);
   });
 
-  it('a página não usa scripts ou estilos inline', async () => {
-    const html = await (await fetch(`${baseUrl}/`)).text();
-    assert.doesNotMatch(html, /<script(?![^>]*\ssrc=)[^>]*>/);
-    assert.doesNotMatch(html, /<style/);
-    assert.doesNotMatch(html, /\sstyle=/);
-    assert.doesNotMatch(html, /\son[a-z]+=/i);
+  for (const pagina of ['/', '/painel', '/recuperar']) {
+    it(`${pagina} não usa scripts ou estilos inline e não é guardada em cache`, async () => {
+      const res = await fetch(`${baseUrl}${pagina}`);
+      assert.equal(res.status, 200);
+      assert.equal(res.headers.get('cache-control'), 'no-store');
+      assert.match(res.headers.get('content-security-policy'), /default-src 'self'/);
+      const html = await res.text();
+      assert.doesNotMatch(html, /<script(?![^>]*\ssrc=)[^>]*>/);
+      assert.doesNotMatch(html, /<style/);
+      assert.doesNotMatch(html, /\sstyle=/);
+      assert.doesNotMatch(html, /\son[a-z]+=/i);
+    });
+  }
+
+  it('CSP exige Trusted Types e não permite criar políticas', async () => {
+    const csp = (await fetch(`${baseUrl}/`)).headers.get('content-security-policy');
+    assert.match(csp, /require-trusted-types-for 'script'/);
+    assert.match(csp, /trusted-types 'none'/);
   });
 
   it('serve o logo otimizado referenciado na página', async () => {
