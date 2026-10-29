@@ -122,7 +122,7 @@ Relacionamentos.
 | segredo TOTP | users | Crítico | AES-256-GCM |
 | [dado sensível do domínio] | | Sensível | AES-256-GCM |
 
-Tabelas previstas: `users`, `mfa_recovery_codes`, `sessions`, `audit_log`, [outras].
+Tabelas previstas: `usuario`, `mfa_recovery_codes`, `sessions`, `log`, [outras].
 
 ## 6. Eventos de auditoria
 login_success, login_failure, mfa_success, mfa_failure, password_change, sensitive_data_access, role_change, [outros].
@@ -144,8 +144,8 @@ Resumo; análise completa (STRIDE) em `THREAT_MODEL.md`.
 
 ## 9. Plano de tarefas
 Cada tarefa deve ser pequena, testável e entregar valor.
-- [ ] T01 Estrutura do repo, docker-compose, CI com lint/testes
-- [ ] T02 Migrations iniciais (users, audit_log com triggers WORM)
+- [x] T01 Estrutura do repo, docker-compose, CI com lint/testes
+- [x] T02 Migrations iniciais (usuario, log com triggers WORM)
 - [ ] T03 Módulo de criptografia (AES-GCM + envelope) com testes
 - [ ] T04 Cadastro e login (Argon2id)
 - [ ] T05 MFA TOTP + códigos de recuperação

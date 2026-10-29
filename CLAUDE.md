@@ -18,9 +18,9 @@ Acadêmico de Segurança da Informação. Segurança vem antes de funcionalidade
 6. Decisão técnica nova ou que mude algo existente: crie um ADR em `docs/adr/`.
 
 ## Comandos
-- Backend: `cd backend && uv run pytest` | `uv run ruff check .` | `uv run mypy .` | `uv run bandit -r app` | `uv run pip-audit`
+- Backend: `cd backend && uv run --env-file ../.env pytest` | `uv run ruff check .` | `uv run mypy .` | `uv run bandit -r app` | `uv run pip-audit`
 - Frontend: `cd frontend && npm test` | `npm run lint` | `npm audit`
-- Banco (na raiz, requer MIGRATION_DATABASE_URL): `uv run --project backend alembic upgrade head`
+- Banco: `cd backend && uv run --env-file ../.env python -m scripts.bootstrap_db` (roles, 1x) | na raiz: `uv run --project backend --env-file .env alembic upgrade head`
 - Subir tudo: `docker compose up`
 
 ## Regras de segurança (inegociáveis)
@@ -38,9 +38,9 @@ Acadêmico de Segurança da Informação. Segurança vem antes de funcionalidade
 - Dependências: versões fixas (lockfile), rodar `npm audit` e `pip-audit` periodicamente.
 
 ## Log de auditoria WORM
-- Tabela `audit_log` append-only: triggers bloqueiam UPDATE, DELETE e TRUNCATE.
+- Tabela `log` (schema `app`) append-only: triggers bloqueiam UPDATE, DELETE e TRUNCATE.
 - A role da aplicação só tem INSERT e SELECT nessa tabela.
-- Cada registro guarda `prev_hash` e `hash` (SHA-256 do conteúdo + prev_hash) para detectar adulteração.
+- Cada registro guarda `prev_hash` e `hash_assinatura_worm` (SHA-256 do conteúdo + prev_hash) para detectar adulteração.
 - Deve existir um job/endpoint de verificação da cadeia de hashes.
 - Eventos obrigatórios: login (sucesso/falha), MFA, troca de senha, acesso a dado sensível, mudança de permissão.
 - Nunca incluir dado sensível no conteúdo do log.

@@ -13,7 +13,7 @@ flowchart LR
     F -->|HTTPS + cookie de sessão| B[API Python / FastAPI]
     B -->|SQL parametrizado| D[(PostgreSQL 18)]
     B -->|KEK| K[Gerenciador de chaves: .env no dev, secret manager em produção]
-    D --- A[(audit_log WORM)]
+    D --- A[(log WORM)]
 ```
 
 | Componente | Tecnologia | Responsabilidade |
@@ -62,7 +62,7 @@ sequenceDiagram
     U->>F: código TOTP
     F->>B: POST /auth/mfa/verify
     B->>D: decifra segredo TOTP, valida código
-    B->>D: grava evento em audit_log
+    B->>D: grava evento em log
     B-->>F: sessão completa (cookie HttpOnly, Secure, SameSite)
 ```
 Regras: token temporário só vale para a etapa MFA; rate limit e bloqueio progressivo nas duas etapas; códigos de recuperação de uso único, armazenados com hash.
@@ -85,7 +85,7 @@ Regras: token temporário só vale para a etapa MFA; rate limit e bloqueio progr
 
 ## 6. Log de auditoria WORM
 
-- Tabela `audit_log` **append-only**: triggers bloqueiam `UPDATE`, `DELETE` e `TRUNCATE`.
+- Tabela `log` (schema `app`) **append-only**: triggers bloqueiam `UPDATE`, `DELETE` e `TRUNCATE`.
 - Role da aplicação (`app_user`) com **apenas INSERT e SELECT** na tabela. Migrations rodam com outra role.
 - **Hash encadeado:** `hash = SHA-256(conteudo + prev_hash)`. Alterar um registro quebra todos os seguintes.
 - Endpoint/job de **verificação da cadeia** para detectar adulteração.
@@ -94,7 +94,7 @@ Regras: token temporário só vale para a etapa MFA; rate limit e bloqueio progr
 
 Esquema base:
 ```
-audit_log(id, timestamp, user_id, evento, ip, detalhes_json, prev_hash, hash)
+log(id_log, data_hora, acao, resumo_acessado, ip_origem, request_id, geolocalizacao, cpf_usuario_hash, cpf_paciente_hash, id_oci, prev_hash, hash_assinatura_worm)
 ```
 
 ## 7. Controle de acesso
