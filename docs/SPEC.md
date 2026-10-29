@@ -40,10 +40,10 @@ Como usuário, quero entrar com senha + código TOTP.
 
 **RF-03 Cadastro Pacientes**
 Dados do paciente.
-- [ ] Criptografar dados sensíveis
-- [ ] Tabela: [paciente] Campos: [cpf_hash, cpf_cripto, nome_cripto, data_nascimento_cripto, email_cripto]
-- [ ] CRUD
-- [ ] Conferir digitos verificador do CPF
+- [x] Criptografar dados sensíveis
+- [x] Tabela: [paciente] Campos: [cpf_hash, cpf_cripto, nome_cripto, data_nascimento_cripto, email_cripto]
+- [x] CRUD (exclusão lógica; sem listagem geral até o recorte por unidade — ADR-0011)
+- [x] Conferir digitos verificador do CPF
 
 **RF-04 Consulta de logs de auditoria (auditor)**
 Log WORM do Sistema. Logar tudo.
@@ -150,7 +150,7 @@ Cada tarefa deve ser pequena, testável e entregar valor.
 - [x] T04 Cadastro e login (bcrypt, etapa CPF + senha)
 - [x] T05 MFA TOTP + códigos de recuperação
 - [x] T06 Auditoria com hash encadeado + verificação
-- [ ] T07 Funcionalidade principal (RF-03)
+- [x] T07 Funcionalidade principal (RF-03)
 - [ ] T08 Frontend: telas de login/MFA/principal
 - [ ] T09 Hardening (headers, rate limit, CSRF)
 - [ ] T10 Revisão de segurança + relatório final

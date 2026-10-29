@@ -104,6 +104,8 @@ log_checkpoint(id_checkpoint, criado_em, seq_cadeia, hash_cadeia, assinatura)
 ## 7. Controle de acesso
 RBAC com perfis (usuário, profissional, administrador, auditor). Verificação **sempre no backend**, a cada requisição. Auditor tem somente leitura dos logs. Administrador não lê dados de saúde sem registro de auditoria.
 
+Implementação (ADR-0011): usuário → `usuario_grupo` → `grupo_papel` → `papel_permissao` → permissão (todos ativos), checada pela dependência `exigir(permissao)` em cada rota, sem cache. Perfis iniciais: Administrador, Gestor, Gestor do Cuidado, Navegador e Auditor; atribuição por `scripts.atribuir_grupo` (evento `role_change`). Negativas geram `access_denied`. Pacientes são acessados por UUID opaco (`id_publico`); o CPF só trafega no corpo da busca.
+
 ## 8. Implantação (Docker)
 - Desenvolvimento: `db` no Docker (porta 127.0.0.1:5433), backend e frontend rodando no WSL.
 - Empacotamento (T01/T09): serviços `backend` e `frontend` com Dockerfile (usuário não-root, imagem enxuta), rede interna entre containers e apenas o frontend exposto.

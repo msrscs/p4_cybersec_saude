@@ -24,6 +24,12 @@ cd backend && uv run --env-file ../.env python -m scripts.criar_usuario \
   `cd backend && uv run --env-file ../.env python -m scripts.resetar_acesso --cpf ...`,
   que gera uma senha temporária (mostrada uma vez); o usuário recadastra o MFA e troca a senha.
 
+## Perfis de acesso (RBAC)
+```bash
+cd backend && uv run --env-file ../.env python -m scripts.atribuir_grupo --cpf 000.000.000-00 --grupo Administrador
+```
+Grupos: Administrador, Gestor, Gestor do Cuidado, Navegador, Auditor (`--remover` desfaz). Sem grupo, o usuário entra mas não acessa pacientes (ADR-0011).
+
 ## Integridade do log de auditoria
 ```bash
 cd backend && uv run --env-file ../.env python -m scripts.verificar_log --checkpoint
