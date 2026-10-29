@@ -18,6 +18,12 @@ cd backend && uv run --env-file ../.env python -m scripts.criar_usuario \
   --cpf 000.000.000-00 --nome "Seu Nome" --email voce@recife.pe.gov.br   # senha pedida sem eco
 ```
 
+## Acesso e recuperação
+- **1º acesso:** CPF + senha → cadastro do MFA (QR code no Google/Microsoft Authenticator) → guarde os 10 códigos de recuperação.
+- **Esqueceu a senha ou perdeu o celular e os códigos:** um administrador roda
+  `cd backend && uv run --env-file ../.env python -m scripts.resetar_acesso --cpf ...`,
+  que gera uma senha temporária (mostrada uma vez); o usuário recadastra o MFA e troca a senha.
+
 ## Subir o ambiente
 ```bash
 docker compose up --build

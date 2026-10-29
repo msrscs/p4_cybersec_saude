@@ -148,7 +148,7 @@ Cada tarefa deve ser pequena, testável e entregar valor.
 - [x] T02 Migrations iniciais (usuario, log com triggers WORM)
 - [x] T03 Módulo de criptografia (AES-GCM + envelope) com testes
 - [x] T04 Cadastro e login (bcrypt, etapa CPF + senha)
-- [ ] T05 MFA TOTP + códigos de recuperação
+- [x] T05 MFA TOTP + códigos de recuperação
 - [ ] T06 Auditoria com hash encadeado + verificação
 - [ ] T07 Funcionalidade principal (RF-03)
 - [ ] T08 Frontend: telas de login/MFA/principal

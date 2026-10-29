@@ -58,14 +58,14 @@ sequenceDiagram
     U->>F: CPF + senha
     F->>B: POST /auth/login
     B->>D: busca usuário (hash do CPF), verifica bcrypt
-    B-->>F: 200 mfa_required (token temporário, curto)
+    B-->>F: 200 etapa=mfa ou mfa_cadastro (cookie pre_auth, 5 min)
     U->>F: código TOTP
-    F->>B: POST /auth/mfa/verify
+    F->>B: POST /auth/mfa/verificar
     B->>D: decifra segredo TOTP, valida código
     B->>D: grava evento em log
-    B-->>F: sessão completa (cookie HttpOnly, Secure, SameSite)
+    B-->>F: sessão completa (cookie __Host-sessao: HttpOnly, Secure, SameSite=Strict)
 ```
-Regras: token temporário só vale para a etapa MFA; rate limit e bloqueio progressivo nas duas etapas; códigos de recuperação de uso único, armazenados com hash.
+Regras (ADR-0002, 0008, 0009): token temporário só vale para a etapa MFA; sessão expira com 15 min sem uso e 8 h no máximo; rate limit e bloqueio progressivo nas duas etapas; códigos de recuperação de uso único, armazenados com hash.
 
 ## 5. Criptografia de dados sensíveis (envelope encryption)
 
