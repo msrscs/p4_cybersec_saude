@@ -24,7 +24,9 @@ class Usuario(Base):
     kek_versao: Mapped[int] = mapped_column(SmallInteger)
     senha_hash: Mapped[str] = mapped_column(Text)
     totp_segredo_cripto: Mapped[bytes | None] = mapped_column(BYTEA)
+    totp_ultimo_passo: Mapped[int | None] = mapped_column(BigInteger)
     mfa_ativo: Mapped[bool] = mapped_column(default=False)
+    troca_senha_obrigatoria: Mapped[bool] = mapped_column(default=False)
     id_unidade: Mapped[int | None]
     status: Mapped[str] = mapped_column(Text, default="ativo")
     falhas_login: Mapped[int] = mapped_column(default=0)
@@ -47,10 +49,27 @@ class Sessao(Base):
     escopo: Mapped[str] = mapped_column(Text)
     expira_em: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True))
     ip: Mapped[str | None] = mapped_column(INET)
+    tentativas: Mapped[int] = mapped_column(SmallInteger, default=0)
+    ultimo_uso: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True))
+    expira_absoluta: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True))
     criado_em: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), server_default="now()")
 
     def __repr__(self) -> str:
         return "<Sessao>"
+
+
+class CodigoRecuperacao(Base):
+    __tablename__ = "mfa_codigo_recuperacao"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    cpf_hash: Mapped[bytes] = mapped_column(BYTEA)
+    codigo_hash: Mapped[bytes] = mapped_column(BYTEA, unique=True)
+    criado_em: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), server_default="now()")
+    usado_em: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True))
+    invalidado_em: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True))
+
+    def __repr__(self) -> str:
+        return "<CodigoRecuperacao>"
 
 
 class Log(Base):

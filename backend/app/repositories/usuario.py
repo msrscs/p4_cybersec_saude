@@ -21,3 +21,7 @@ def existe(db: Session, *, cpf_hash: bytes, email_hash: bytes) -> bool:
 def inserir(db: Session, usuario: Usuario) -> None:
     db.add(usuario)
     db.flush()
+
+
+def buscar(db: Session, cpf_hash: bytes) -> Usuario | None:
+    return db.get(Usuario, cpf_hash)
