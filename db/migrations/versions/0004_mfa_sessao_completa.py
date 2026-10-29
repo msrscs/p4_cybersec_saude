@@ -56,9 +56,7 @@ def upgrade() -> None:
     )
     op.execute("REVOKE ALL ON app.mfa_codigo_recuperacao FROM PUBLIC")
     op.execute("GRANT SELECT, INSERT ON app.mfa_codigo_recuperacao TO app_user")
-    op.execute(
-        "GRANT UPDATE (usado_em, invalidado_em) ON app.mfa_codigo_recuperacao TO app_user"
-    )
+    op.execute("GRANT UPDATE (usado_em, invalidado_em) ON app.mfa_codigo_recuperacao TO app_user")
 
 
 def downgrade() -> None:
