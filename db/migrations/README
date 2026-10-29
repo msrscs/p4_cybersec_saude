@@ -1,0 +1,5 @@
+Migrations do banco (Alembic). Rodar a partir da raiz do repositório:
+
+    uv run --project backend alembic upgrade head
+
+Requer MIGRATION_DATABASE_URL no ambiente. Nunca altere uma migration já aplicada: crie uma nova.
