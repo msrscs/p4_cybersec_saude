@@ -18,7 +18,7 @@ flowchart LR
 
 | Componente | Tecnologia | Responsabilidade |
 |---|---|---|
-| Frontend | Node.js | Telas, fluxo de login/MFA, headers de segurança (CSP, HSTS) |
+| Frontend | Node.js | Telas, fluxo de login/MFA, headers de segurança (CSP, HSTS, Trusted Types) e repasse restrito `/api` para a API (ADR-0012) |
 | Backend | Python 3.14 + FastAPI | Regras de negócio, autenticação, MFA, criptografia, auditoria |
 | Banco | PostgreSQL 18 (Docker) | Persistência, triggers WORM, permissões por role |
 | Chaves | Variável de ambiente (dev) | Guarda a KEK que cifra as DEKs |
@@ -55,8 +55,8 @@ sequenceDiagram
     participant F as Frontend
     participant B as API
     participant D as Banco
-    U->>F: CPF + senha
-    F->>B: POST /auth/login
+    U->>F: CPF + senha (POST /api/auth/login)
+    F->>B: POST /auth/login (repasse restrito, X-Forwarded-For = IP real)
     B->>D: busca usuário (hash do CPF), verifica bcrypt
     B-->>F: 200 etapa=mfa ou mfa_cadastro (cookie pre_auth, 5 min)
     U->>F: código TOTP

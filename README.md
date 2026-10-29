@@ -36,6 +36,13 @@ cd backend && uv run --env-file ../.env python -m scripts.verificar_log --checkp
 ```
 Recalcula a cadeia de hashes inteira, grava um checkpoint assinado e imprime a **âncora** (`seq:hash`): guarde-a fora do sistema e confira depois com `--ancora seq:hash`. Sai com código 1 se detectar adulteração (ADR-0010).
 
+## Teste ponta a ponta (navegador)
+```bash
+cd frontend && npx playwright install chromium && sudo npx playwright install-deps chromium  # 1x
+cd backend && uv run --env-file ../.env python -m tests.e2e_ambiente
+```
+Sobe um banco temporário, a API e o frontend em portas próprias, roda o fluxo completo no Chromium (login, MFA, pacientes, logout) e remove tudo no fim (ADR-0012).
+
 ## Subir o ambiente
 ```bash
 docker compose up --build

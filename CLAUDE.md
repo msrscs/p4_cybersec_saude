@@ -19,7 +19,7 @@ Acadêmico de Segurança da Informação. Segurança vem antes de funcionalidade
 
 ## Comandos
 - Backend: `cd backend && uv run --env-file ../.env pytest` | `uv run ruff check .` | `uv run mypy .` | `uv run bandit -r app` | `uv run pip-audit`
-- Frontend: `cd frontend && npm test` | `npm run lint` | `npm audit`
+- Frontend: `cd frontend && npm test` | `npm run lint` | `npm audit` | e2e: `cd backend && uv run --env-file ../.env python -m tests.e2e_ambiente`
 - Banco: `cd backend && uv run --env-file ../.env python -m scripts.bootstrap_db` (roles, 1x) | na raiz: `uv run --project backend --env-file .env alembic upgrade head`
 - Subir tudo: `docker compose up`
 
