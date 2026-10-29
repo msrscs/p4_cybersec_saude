@@ -14,24 +14,50 @@ concurrency:
 
 jobs:
   backend:
-    name: Backend (lint, tipos, segurança, testes)
+    name: Backend (lint, tipos, segurança, testes + Postgres)
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: backend
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: cs_admin
+          # Banco efêmero do CI, destruído ao fim do job; não é segredo de nenhum ambiente.
+          POSTGRES_PASSWORD: ci-efemero
+          POSTGRES_DB: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U cs_admin" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      POSTGRES_USER: cs_admin
+      POSTGRES_PASSWORD: ci-efemero
+      POSTGRES_DB: postgres
+      DB_HOST: localhost
+      DB_PORT: "5432"
+      REQUIRE_DB_TESTS: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Gera senhas aleatórias das roles para esta execução
+        run: |
+          echo "::add-mask::$(openssl rand -hex 24 | tee /tmp/app_pw)"
+          echo "::add-mask::$(openssl rand -hex 24 | tee /tmp/mig_pw)"
+          echo "APP_DB_PASSWORD=$(cat /tmp/app_pw)" >> "$GITHUB_ENV"
+          echo "MIGRATOR_DB_PASSWORD=$(cat /tmp/mig_pw)" >> "$GITHUB_ENV"
+          rm /tmp/app_pw /tmp/mig_pw
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           version: "0.13.6"
           enable-cache: true
       - run: uv sync --locked
-      - run: uv run ruff check .
-      - run: uv run ruff format --check .
+      - run: uv run ruff check . ../db
+      - run: uv run ruff format --check . ../db
       - run: uv run mypy .
-      - run: uv run bandit -r app
+      - run: uv run bandit -r app scripts
       - run: uv run pytest
       - run: uv run pip-audit
 

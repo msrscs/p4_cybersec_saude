@@ -30,8 +30,11 @@ services:
     restart: unless-stopped
     environment:
       ENVIRONMENT: ${ENVIRONMENT:-dev}
-      # Role da aplicação (menor privilégio), nunca o superusuário do Postgres.
-      DATABASE_URL: ${APP_DATABASE_URL:?defina APP_DATABASE_URL no .env}
+      # A API conecta como app_user (menor privilégio), nunca como superusuário.
+      POSTGRES_DB: ${POSTGRES_DB:?defina POSTGRES_DB no .env}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?defina APP_DB_PASSWORD no .env}
+      DB_HOST: db
+      DB_PORT: "5432"
     networks: [internal]          # sem porta publicada: só o frontend fala com a API
     depends_on:
       db:
