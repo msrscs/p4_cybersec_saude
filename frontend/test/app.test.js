@@ -43,6 +43,14 @@ describe('frontend', () => {
     assert.doesNotMatch(html, /\son[a-z]+=/i);
   });
 
+  it('serve o logo otimizado referenciado na página', async () => {
+    const html = await (await fetch(`${baseUrl}/`)).text();
+    assert.match(html, /\/img\/cybersecsaude-720\.webp/);
+    const res = await fetch(`${baseUrl}/img/cybersecsaude-720.webp`);
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get('content-type'), 'image/webp');
+  });
+
   it('rota inexistente retorna 404 genérico', async () => {
     const res = await fetch(`${baseUrl}/nao-existe`);
     assert.equal(res.status, 404);

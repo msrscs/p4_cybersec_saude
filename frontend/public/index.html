@@ -5,24 +5,35 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light dark" />
     <title>CyberSec Saúde · Acesso</title>
-    <link rel="icon" href="/img/logo.svg" type="image/svg+xml" />
+    <link rel="icon" href="/img/icone-64.png" type="image/png" sizes="64x64" />
+    <link rel="apple-touch-icon" href="/img/icone-192.png" />
     <link rel="stylesheet" href="/css/main.css" />
     <script type="module" src="/js/login.js"></script>
   </head>
   <body>
     <div class="shell">
       <aside class="brand-panel">
-        <div class="brand">
-          <!-- Substituir /img/logo.svg pelo logo oficial quando disponível. -->
-          <img class="brand__logo" src="/img/logo.svg" alt="" width="44" height="44" />
-          <span class="brand__name">CyberSec <strong>Saúde</strong></span>
-        </div>
+        <picture class="logo logo--panel">
+          <source
+            type="image/webp"
+            srcset="/img/cybersecsaude-720.webp 720w, /img/cybersecsaude-1440.webp 1440w"
+            sizes="(max-width: 900px) 0px, 360px"
+          />
+          <img
+            src="/img/cybersecsaude-720.jpg"
+            srcset="/img/cybersecsaude-720.jpg 720w, /img/cybersecsaude-1440.jpg 1440w"
+            sizes="(max-width: 900px) 0px, 360px"
+            alt="CyberSec Saúde"
+            width="720"
+            height="321"
+          />
+        </picture>
 
         <div class="brand-panel__content">
           <p class="eyebrow">Oferta de Cuidados Integrados · SESAU Recife</p>
           <h1 class="hero-title">
-            Jornadas de cuidado <span class="accent">contínuas</span>, dados
-            <span class="accent">protegidos</span>.
+            Conectando <span class="accent">dados</span>, protegendo
+            <span class="accent">vidas</span>.
           </h1>
           <p class="hero-text">
             Acompanhe a navegação dos pacientes entre a Atenção Primária, Especializada e as demais
@@ -70,10 +81,10 @@
 
       <main class="auth" id="conteudo">
         <section class="card" aria-labelledby="titulo-login">
-          <div class="brand brand--compact">
-            <img class="brand__logo" src="/img/logo.svg" alt="" width="36" height="36" />
-            <span class="brand__name">CyberSec <strong>Saúde</strong></span>
-          </div>
+          <picture class="logo logo--compact">
+            <source type="image/webp" srcset="/img/cybersecsaude-720.webp" />
+            <img src="/img/cybersecsaude-720.jpg" alt="CyberSec Saúde" width="720" height="321" />
+          </picture>
 
           <header class="card__header">
             <h2 id="titulo-login">Acesse sua conta</h2>

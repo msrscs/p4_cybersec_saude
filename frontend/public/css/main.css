@@ -8,7 +8,7 @@
   --primary: #0b7a75;
   --primary-strong: #075e5a;
   --primary-soft: rgb(11 122 117 / 12%);
-  --accent: #5eead4;
+  --accent: #e8b46a; /* dourado do logo */
   --danger: #b42318;
   --focus: #2563eb;
   --panel-from: #062a3a;
@@ -111,23 +111,21 @@ svg {
   z-index: 1;
 }
 
-.brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.brand__logo {
+.logo img {
   display: block;
+  width: 100%;
+  height: auto;
 }
 
-.brand__name {
-  font-size: 1.15rem;
-  letter-spacing: -0.01em;
-}
-
-.brand__name strong {
-  font-weight: 700;
+.logo--panel {
+  display: block;
+  width: min(360px, 100%);
+  overflow: hidden;
+  border: 1px solid rgb(232 180 106 / 35%);
+  border-radius: 16px;
+  box-shadow:
+    0 18px 40px -12px rgb(0 0 0 / 45%),
+    0 0 0 6px rgb(255 255 255 / 4%);
 }
 
 .brand-panel__content {
@@ -189,7 +187,7 @@ svg {
   border-radius: 10px;
   font-size: 18px;
   color: var(--accent);
-  background: rgb(94 234 212 / 14%);
+  background: rgb(232 180 106 / 14%);
 }
 
 .feature h2 {
@@ -227,9 +225,11 @@ svg {
   box-shadow: var(--shadow);
 }
 
-.brand--compact {
+.logo--compact {
   display: none;
-  margin-bottom: 28px;
+  overflow: hidden;
+  margin: -12px -12px 28px;
+  border-radius: 12px;
 }
 
 .card__header h2 {
@@ -416,8 +416,8 @@ input[aria-invalid='true'] {
     display: none;
   }
 
-  .brand--compact {
-    display: inline-flex;
+  .logo--compact {
+    display: block;
   }
 
   .auth {
