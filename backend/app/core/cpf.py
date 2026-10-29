@@ -26,3 +26,8 @@ def validar_cpf(valor: str) -> str:
     if not cpf_valido(valor):
         raise ValueError("CPF inválido.")
     return normalizar_cpf(valor)
+
+
+def formatar_cpf(cpf: str) -> str:
+    """'12345678909' -> '123.456.789-09' (espera CPF já normalizado)."""
+    return f"{cpf[:3]}.{cpf[3:6]}.{cpf[6:9]}-{cpf[9:]}"

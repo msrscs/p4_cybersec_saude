@@ -13,6 +13,7 @@ def registrar(
     *,
     acao: str,
     cpf_usuario_hash: bytes | None = None,
+    cpf_paciente_hash: bytes | None = None,
     ip_origem: str | None = None,
     request_id: str | None = None,
     resumo: dict[str, Any] | None = None,
@@ -21,6 +22,7 @@ def registrar(
         Log(
             acao=acao,
             cpf_usuario_hash=cpf_usuario_hash,
+            cpf_paciente_hash=cpf_paciente_hash,
             ip_origem=ip_origem,
             request_id=request_id,
             resumo_acessado=resumo or {},

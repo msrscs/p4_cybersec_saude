@@ -27,6 +27,14 @@ class Evento(StrEnum):
     LOG_CHAIN_VERIFIED = "log_chain_verified"
     LOG_CHAIN_BROKEN = "log_chain_broken"
     LOG_CHECKPOINT_CREATED = "log_checkpoint_created"
+    ACCESS_DENIED = "access_denied"
+    ROLE_CHANGE = "role_change"
+    SENSITIVE_DATA_ACCESS = "sensitive_data_access"
+    PATIENT_CREATED = "patient_created"
+    PATIENT_UPDATED = "patient_updated"
+    PATIENT_DEACTIVATED = "patient_deactivated"
+    PATIENT_REACTIVATED = "patient_reactivated"
+    PATIENT_SEARCH = "patient_search"
 
 
 @dataclass(frozen=True)
@@ -41,12 +49,14 @@ def registrar(
     ctx: ContextoRequisicao,
     *,
     cpf_usuario_hash: bytes | None = None,
+    cpf_paciente_hash: bytes | None = None,
     resumo: dict[str, Any] | None = None,
 ) -> None:
     log_repo.registrar(
         db,
         acao=evento.value,
         cpf_usuario_hash=cpf_usuario_hash,
+        cpf_paciente_hash=cpf_paciente_hash,
         ip_origem=ctx.ip,
         request_id=ctx.request_id,
         resumo=resumo,

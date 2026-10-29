@@ -1,9 +1,10 @@
 """Mapeamento ORM das tabelas do schema `app` (a estrutura é definida pelas migrations)."""
 
+import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, FetchedValue, Identity, MetaData, SmallInteger, Text
+from sqlalchemy import BigInteger, FetchedValue, ForeignKey, Identity, MetaData, SmallInteger, Text
 from sqlalchemy.dialects.postgresql import BYTEA, INET, JSONB, TIMESTAMP, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -106,3 +107,86 @@ class LogCheckpoint(Base):
 
     def __repr__(self) -> str:
         return "<LogCheckpoint>"
+
+
+# --- RBAC (RF-05/06/07/13). Estrutura e papéis iniciais definidos na migration 0006. ---
+
+
+class Papel(Base):
+    __tablename__ = "papel"
+
+    id_papel: Mapped[int] = mapped_column(SmallInteger, Identity(always=True), primary_key=True)
+    papel: Mapped[str] = mapped_column(Text, unique=True)
+    descricao: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(Text, default="ativo")
+
+
+class Permissao(Base):
+    __tablename__ = "permissao"
+
+    id_permissao: Mapped[int] = mapped_column(SmallInteger, Identity(always=True), primary_key=True)
+    permissao: Mapped[str] = mapped_column(Text, unique=True)
+    descricao: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(Text, default="ativo")
+
+
+class Grupo(Base):
+    __tablename__ = "grupo"
+
+    id_grupo: Mapped[int] = mapped_column(SmallInteger, Identity(always=True), primary_key=True)
+    grupo: Mapped[str] = mapped_column(Text, unique=True)
+    status: Mapped[str] = mapped_column(Text, default="ativo")
+
+
+class PapelPermissao(Base):
+    __tablename__ = "papel_permissao"
+
+    fk_papel_id_papel: Mapped[int] = mapped_column(
+        SmallInteger, ForeignKey(Papel.id_papel), primary_key=True
+    )
+    fk_permissao_id_permissao: Mapped[int] = mapped_column(
+        SmallInteger, ForeignKey(Permissao.id_permissao), primary_key=True
+    )
+
+
+class GrupoPapel(Base):
+    __tablename__ = "grupo_papel"
+
+    fk_grupo_id_grupo: Mapped[int] = mapped_column(
+        SmallInteger, ForeignKey(Grupo.id_grupo), primary_key=True
+    )
+    fk_papel_id_papel: Mapped[int] = mapped_column(
+        SmallInteger, ForeignKey(Papel.id_papel), primary_key=True
+    )
+
+
+class UsuarioGrupo(Base):
+    __tablename__ = "usuario_grupo"
+
+    fk_usuario_cpf_hash: Mapped[bytes] = mapped_column(
+        BYTEA, ForeignKey(Usuario.cpf_hash), primary_key=True
+    )
+    fk_grupo_id_grupo: Mapped[int] = mapped_column(
+        SmallInteger, ForeignKey(Grupo.id_grupo), primary_key=True
+    )
+
+
+class Paciente(Base):
+    __tablename__ = "paciente"
+
+    cpf_hash: Mapped[bytes] = mapped_column(BYTEA, primary_key=True)
+    id_publico: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), unique=True)
+    cpf_cripto: Mapped[bytes] = mapped_column(BYTEA)
+    nome_cripto: Mapped[bytes] = mapped_column(BYTEA)
+    data_nascimento_cripto: Mapped[bytes] = mapped_column(BYTEA)
+    email_cripto: Mapped[bytes | None] = mapped_column(BYTEA)
+    dek_cripto: Mapped[bytes] = mapped_column(BYTEA)
+    kek_versao: Mapped[int] = mapped_column(SmallInteger)
+    status: Mapped[str] = mapped_column(Text, default="ativo")
+    criado_em: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), server_default="now()")
+    atualizado_em: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default="now()", server_onupdate=FetchedValue()
+    )
+
+    def __repr__(self) -> str:  # nunca expor campos, nem cifrados
+        return "<Paciente>"
