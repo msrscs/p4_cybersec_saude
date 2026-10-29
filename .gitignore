@@ -27,3 +27,6 @@ npm-debug.log*
 .vscode/
 .idea/
 .DS_Store
+
+# Metadados do Windows ao copiar arquivos para o WSL
+*:Zone.Identifier
