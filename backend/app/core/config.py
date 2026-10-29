@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     kek_keyring: SecretStr
     kek_ativa: int
     hmac_key: SecretStr
+    # Assina os checkpoints da cadeia do log (ADR-0010). Só o script de verificação usa;
+    # a API não precisa dela e o container do backend não a recebe.
+    log_checkpoint_key: SecretStr | None = None
 
     # Custo do bcrypt (ADR-0003). Abaixo de 12 só é aceito em ENVIRONMENT=test.
     bcrypt_rounds: int = 12
@@ -36,7 +39,8 @@ class Settings(BaseSettings):
     def _validar_chaves(self) -> Self:
         # Falha na inicialização se alguma chave for inválida; mensagens sem material de chave.
         _ = self.keyring
-        _ = self.chave_hmac
+        if self.chave_checkpoint is not None and self.chave_checkpoint == self.chave_hmac:
+            raise ValueError("LOG_CHECKPOINT_KEY deve ser diferente de HMAC_KEY.")
         return self
 
     @model_validator(mode="after")
@@ -67,6 +71,12 @@ class Settings(BaseSettings):
     @cached_property
     def chave_hmac(self) -> bytes:
         return decodificar_chave(self.hmac_key.get_secret_value())
+
+    @cached_property
+    def chave_checkpoint(self) -> bytes | None:
+        if self.log_checkpoint_key is None:
+            return None
+        return decodificar_chave(self.log_checkpoint_key.get_secret_value())
 
 
 @lru_cache

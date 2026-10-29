@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, Identity, MetaData, SmallInteger, Text
+from sqlalchemy import BigInteger, FetchedValue, Identity, MetaData, SmallInteger, Text
 from sqlalchemy.dialects.postgresql import BYTEA, INET, JSONB, TIMESTAMP, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -87,5 +87,22 @@ class Log(Base):
     cpf_usuario_hash: Mapped[bytes | None] = mapped_column(BYTEA)
     cpf_paciente_hash: Mapped[bytes | None] = mapped_column(BYTEA)
     id_oci: Mapped[int | None] = mapped_column(BigInteger)
-    prev_hash: Mapped[bytes | None] = mapped_column(BYTEA)
-    hash_assinatura_worm: Mapped[bytes | None] = mapped_column(BYTEA)
+    # Preenchidos pela trigger app.log_encadear (ADR-0010); a aplicação nunca os define.
+    seq_cadeia: Mapped[int] = mapped_column(BigInteger, server_default=FetchedValue())
+    prev_hash: Mapped[bytes] = mapped_column(BYTEA, server_default=FetchedValue())
+    hash_assinatura_worm: Mapped[bytes] = mapped_column(BYTEA, server_default=FetchedValue())
+
+
+class LogCheckpoint(Base):
+    __tablename__ = "log_checkpoint"
+
+    id_checkpoint: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    criado_em: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default="clock_timestamp()"
+    )
+    seq_cadeia: Mapped[int] = mapped_column(BigInteger)
+    hash_cadeia: Mapped[bytes] = mapped_column(BYTEA)
+    assinatura: Mapped[bytes] = mapped_column(BYTEA)
+
+    def __repr__(self) -> str:
+        return "<LogCheckpoint>"
