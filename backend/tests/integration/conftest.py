@@ -8,6 +8,7 @@ REQUIRE_DB_TESTS=1 (CI), quando falham.
 import os
 import secrets
 from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -18,6 +19,7 @@ from alembic.config import Config
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from psycopg import sql
+from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import Settings
@@ -59,8 +61,32 @@ def superuser_connect(dbname: str, host: str, port: int) -> psycopg.Connection[t
     )
 
 
-@pytest.fixture(scope="session")
-def test_db() -> Iterator[BancoTeste]:
+def _url_migrator(db: BancoTeste) -> str:
+    url = build_database_url(
+        user=MIGRATOR_DB_ROLE,
+        password=os.environ["MIGRATOR_DB_PASSWORD"],
+        database=db.name,
+        host=db.host,
+        port=db.port,
+    )
+    return url.render_as_string(hide_password=False)
+
+
+def migrar(db: BancoTeste, revisao: str) -> None:
+    previous = os.environ.get("MIGRATION_DATABASE_URL")
+    os.environ["MIGRATION_DATABASE_URL"] = _url_migrator(db)
+    try:
+        command.upgrade(Config(str(ALEMBIC_INI)), revisao)
+    finally:
+        if previous is None:
+            os.environ.pop("MIGRATION_DATABASE_URL", None)
+        else:
+            os.environ["MIGRATION_DATABASE_URL"] = previous
+
+
+@contextmanager
+def banco_temporario(revisao: str) -> Iterator[BancoTeste]:
+    """Banco novo com bootstrap das roles e migrations até `revisao`; removido no fim."""
     missing = [name for name in _REQUIRED if not os.environ.get(name)]
     if missing:
         if os.environ.get("REQUIRE_DB_TESTS") == "1":
@@ -82,28 +108,19 @@ def test_db() -> Iterator[BancoTeste]:
                 app_password=os.environ["APP_DB_PASSWORD"],
                 migrator_password=os.environ["MIGRATOR_DB_PASSWORD"],
             )
-        url = build_database_url(
-            user=MIGRATOR_DB_ROLE,
-            password=os.environ["MIGRATOR_DB_PASSWORD"],
-            database=db.name,
-            host=host,
-            port=port,
-        )
-        previous = os.environ.get("MIGRATION_DATABASE_URL")
-        os.environ["MIGRATION_DATABASE_URL"] = url.render_as_string(hide_password=False)
-        try:
-            command.upgrade(Config(str(ALEMBIC_INI)), "head")
-        finally:
-            if previous is None:
-                os.environ.pop("MIGRATION_DATABASE_URL", None)
-            else:
-                os.environ["MIGRATION_DATABASE_URL"] = previous
+        migrar(db, revisao)
         yield db
     finally:
         with superuser_connect(admin_db, host, port) as conn:
             conn.execute(
                 sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(db.name))
             )
+
+
+@pytest.fixture(scope="session")
+def test_db() -> Iterator[BancoTeste]:
+    with banco_temporario("head") as db:
+        yield db
 
 
 @pytest.fixture
@@ -142,6 +159,7 @@ def settings_integracao(test_db: BancoTeste) -> Settings:
         kek_keyring=f"1:{gerar_chave_b64()}",
         kek_ativa=1,
         hmac_key=gerar_chave_b64(),
+        log_checkpoint_key=gerar_chave_b64(),
         bcrypt_rounds=4,
     )
 
@@ -150,6 +168,27 @@ def settings_integracao(test_db: BancoTeste) -> Settings:
 def fabrica_sessao(settings_integracao: Settings) -> Iterator[sessionmaker[Session]]:
     engine = criar_engine(settings_integracao)
     yield criar_sessionmaker(engine)
+    engine.dispose()
+
+
+@pytest.fixture
+def sessao_superusuario(test_db: BancoTeste) -> Iterator[Session]:
+    """Sessão de superusuário dentro de uma transação desfeita no fim (simula um atacante
+    com controle total do banco sem estragar o banco compartilhado pelos testes)."""
+    url = build_database_url(
+        user=os.environ["POSTGRES_USER"],
+        password=os.environ["POSTGRES_PASSWORD"],
+        database=test_db.name,
+        host=test_db.host,
+        port=test_db.port,
+    )
+    engine = create_engine(url, hide_parameters=True)
+    with engine.connect() as conn:
+        transacao = conn.begin()
+        try:
+            yield Session(bind=conn, join_transaction_mode="create_savepoint")
+        finally:
+            transacao.rollback()
     engine.dispose()
 
 

@@ -67,8 +67,11 @@ def test_trigger_bloqueia_alteracao_ate_para_dono_da_tabela(
 
 
 def test_trigger_bloqueia_truncate_ate_para_dono_da_tabela(migrator_conn: Conn) -> None:
-    with pytest.raises(errors.InsufficientPrivilege, match="append-only"):
+    # Sem CASCADE a FK de log_checkpoint já impede; com CASCADE a trigger WORM barra.
+    with pytest.raises(errors.FeatureNotSupported):
         migrator_conn.execute("TRUNCATE app.log")
+    with pytest.raises(errors.InsufficientPrivilege, match="append-only"):
+        migrator_conn.execute("TRUNCATE app.log CASCADE")
 
 
 def test_data_hora_sempre_definida_pelo_servidor(app_conn: Conn) -> None:

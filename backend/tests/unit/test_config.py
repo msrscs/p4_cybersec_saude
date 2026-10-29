@@ -71,3 +71,28 @@ def test_configuracao_de_chave_invalida_falha_sem_vazar(
     for segredo in segredos:
         assert segredo not in str(exc.value)
     assert "senha-ficticia-de-teste" not in str(exc.value)
+
+
+def test_chave_de_checkpoint_opcional_e_validada(monkeypatch: pytest.MonkeyPatch) -> None:
+    import os
+
+    from app.core.crypto import gerar_chave_b64
+
+    monkeypatch.delenv("LOG_CHECKPOINT_KEY", raising=False)
+    assert Settings().chave_checkpoint is None
+
+    chave = gerar_chave_b64()
+    monkeypatch.setenv("LOG_CHECKPOINT_KEY", chave)
+    settings = Settings()
+    assert settings.chave_checkpoint is not None
+    assert len(settings.chave_checkpoint) == 32
+    assert chave not in repr(settings)
+
+    monkeypatch.setenv("LOG_CHECKPOINT_KEY", os.environ["HMAC_KEY"])
+    with pytest.raises(ValidationError, match="diferente de HMAC_KEY"):
+        Settings()
+
+    monkeypatch.setenv("LOG_CHECKPOINT_KEY", "YWJj")
+    with pytest.raises(ValidationError) as exc:
+        Settings()
+    assert "YWJj" not in str(exc.value)
