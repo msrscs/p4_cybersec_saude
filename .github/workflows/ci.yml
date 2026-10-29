@@ -66,6 +66,10 @@ jobs:
       - run: uv run pytest
       - name: Cobertura mínima nos módulos críticos (cripto)
         run: uv run coverage report --include="app/core/crypto.py" --fail-under=95
+      - name: Cobertura mínima nos módulos críticos (auth)
+        run: >-
+          uv run coverage report --fail-under=90
+          --include="app/core/senha.py,app/core/cpf.py,app/services/auth.py,app/services/usuario.py,app/api/auth.py"
       - run: uv run pip-audit
 
   frontend:
