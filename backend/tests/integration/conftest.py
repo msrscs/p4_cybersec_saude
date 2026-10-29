@@ -15,6 +15,7 @@ import psycopg
 import pytest
 from alembic import command
 from alembic.config import Config
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from psycopg import sql
 from sqlalchemy.orm import Session, sessionmaker
@@ -153,8 +154,14 @@ def fabrica_sessao(settings_integracao: Settings) -> Iterator[sessionmaker[Sessi
 
 
 @pytest.fixture(scope="session")
-def api(settings_integracao: Settings) -> Iterator[TestClient]:
+def app_teste(settings_integracao: Settings) -> Iterator[FastAPI]:
     app = create_app(settings_integracao)
-    with TestClient(app, base_url="https://testserver") as client:
-        yield client
+    yield app
     app.state.engine.dispose()
+
+
+@pytest.fixture
+def api(app_teste: FastAPI) -> Iterator[TestClient]:
+    """Cliente novo por teste: cookies de um teste não vazam para outro."""
+    with TestClient(app_teste, base_url="https://testserver") as client:
+        yield client

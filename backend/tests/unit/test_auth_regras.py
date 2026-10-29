@@ -4,7 +4,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import create_app
-from app.services.auth import ResultadoLogin, duracao_bloqueio, hash_token
+from app.services.auth import ResultadoLogin, duracao_bloqueio
+from app.services.sessao import hash_token
 
 
 @pytest.mark.parametrize(

@@ -13,7 +13,7 @@ from app.models import Log, Sessao, Usuario
 from app.services import auth as auth_service
 from app.services import usuario as usuario_service
 from app.services.auditoria import ContextoRequisicao
-from app.services.auth import hash_token
+from app.services.sessao import hash_token
 from app.services.usuario import NovoUsuario
 
 from .conftest import gerar_cpf
@@ -61,7 +61,7 @@ def test_login_valido_pede_mfa_e_entrega_cookie_seguro(
 ) -> None:
     resp = api.post("/auth/login", json={"cpf": usuario, "senha": SENHA})
     assert resp.status_code == 200
-    assert resp.json() == {"etapa": "mfa"}
+    assert resp.json() == {"etapa": "mfa_cadastro"}  # 1º acesso: MFA ainda não ativado
     assert resp.headers["cache-control"] == "no-store"
 
     set_cookie = resp.headers["set-cookie"]
