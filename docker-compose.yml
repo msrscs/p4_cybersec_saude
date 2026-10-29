@@ -39,6 +39,8 @@ services:
       KEK_KEYRING: ${KEK_KEYRING:?defina KEK_KEYRING no .env (scripts.gerar_chaves)}
       KEK_ATIVA: ${KEK_ATIVA:?defina KEK_ATIVA no .env}
       HMAC_KEY: ${HMAC_KEY:?defina HMAC_KEY no .env}
+      # IP real do usuário para a auditoria: só o frontend pode informar X-Forwarded-For.
+      FORWARDED_ALLOW_IPS: 172.30.10.10
     networks: [internal]          # sem porta publicada: só o frontend fala com a API
     depends_on:
       db:
@@ -53,7 +55,10 @@ services:
       API_URL: http://backend:8000
     ports:
       - "127.0.0.1:3000:3000"
-    networks: [internal, web]
+    networks:
+      internal:
+        ipv4_address: 172.30.10.10   # fixo: é o único IP em FORWARDED_ALLOW_IPS do backend
+      web: {}
     depends_on:
       backend:
         condition: service_healthy
@@ -61,6 +66,9 @@ services:
 networks:
   internal:
     internal: true                # sem saída para a internet
+    ipam:
+      config:
+        - subnet: 172.30.10.0/24
   web: {}
   db_host: {}                     # apenas para publicar a porta do banco no localhost (dev)
 
