@@ -5,10 +5,12 @@ description = "API do CyberSec Saúde (FastAPI)"
 requires-python = ">=3.14,<3.15"
 dependencies = [
     "alembic>=1.20.1",
+    "bcrypt>=5.0.0",
     "cryptography>=50.0.2",
     "fastapi>=0.162.0",
     "psycopg[binary]>=3.3.6",
     "pydantic-settings>=2.16.2",
+    "pydantic[email]>=2.14.1",
     "sqlalchemy>=2.1.6",
     "uvicorn[standard]>=0.54.0",
 ]

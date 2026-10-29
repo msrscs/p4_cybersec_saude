@@ -9,6 +9,7 @@ from sqlalchemy import URL
 
 from app.core.crypto import Keyring, carregar_keyring, decodificar_chave
 from app.core.db_url import APP_DB_ROLE, build_database_url
+from app.core.senha import ROUNDS_MINIMO_PRODUCAO
 
 
 class Settings(BaseSettings):
@@ -28,11 +29,21 @@ class Settings(BaseSettings):
     kek_ativa: int
     hmac_key: SecretStr
 
+    # Custo do bcrypt (ADR-0003). Abaixo de 12 só é aceito em ENVIRONMENT=test.
+    bcrypt_rounds: int = 12
+
     @model_validator(mode="after")
     def _validar_chaves(self) -> Self:
         # Falha na inicialização se alguma chave for inválida; mensagens sem material de chave.
         _ = self.keyring
         _ = self.chave_hmac
+        return self
+
+    @model_validator(mode="after")
+    def _validar_bcrypt(self) -> Self:
+        minimo = 4 if self.environment == "test" else ROUNDS_MINIMO_PRODUCAO
+        if not minimo <= self.bcrypt_rounds <= 16:
+            raise ValueError(f"BCRYPT_ROUNDS deve estar entre {minimo} e 16.")
         return self
 
     @property
