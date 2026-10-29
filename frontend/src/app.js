@@ -4,9 +4,11 @@ import { fileURLToPath } from 'node:url';
 import express from 'express';
 import helmet from 'helmet';
 
+import { createApiProxy } from './proxy.js';
+
 const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 
-export function createApp() {
+export function createApp({ apiUrl = 'http://127.0.0.1:8000', apiTimeoutMs } = {}) {
   const app = express();
   app.disable('x-powered-by');
 
@@ -25,6 +27,9 @@ export function createApp() {
           baseUri: ["'self'"],
           formAction: ["'self'"],
           frameAncestors: ["'none'"],
+          // Trusted Types: o navegador recusa atribuir texto a innerHTML e afins (I6).
+          requireTrustedTypesFor: ["'script'"],
+          trustedTypes: ["'none'"],
         },
       },
       strictTransportSecurity: { maxAge: 63072000, includeSubDomains: true, preload: true },
@@ -40,7 +45,18 @@ export function createApp() {
     res.json({ status: 'ok' });
   });
 
-  app.use(express.static(publicDir, { dotfiles: 'deny', index: 'index.html' }));
+  app.use('/api', createApiProxy({ apiUrl, timeoutMs: apiTimeoutMs }));
+
+  app.use(
+    express.static(publicDir, {
+      dotfiles: 'deny',
+      index: 'index.html',
+      extensions: ['html'], // /painel -> painel.html
+      setHeaders: (res, arquivo) => {
+        if (arquivo.endsWith('.html')) res.setHeader('Cache-Control', 'no-store');
+      },
+    }),
+  );
 
   app.use((_req, res) => {
     res.status(404).json({ detail: 'Não encontrado.' });
