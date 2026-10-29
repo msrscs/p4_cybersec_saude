@@ -22,6 +22,8 @@ htmlcov/
 node_modules/
 coverage/
 npm-debug.log*
+test-results/
+playwright-report/
 
 # Editores / SO
 .vscode/

@@ -2,3 +2,7 @@ node_modules
 coverage
 test
 .env
+e2e
+playwright.config.js
+test-results
+playwright-report
