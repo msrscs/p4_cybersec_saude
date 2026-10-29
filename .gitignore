@@ -1,0 +1,29 @@
+# Segredos
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Node
+node_modules/
+coverage/
+npm-debug.log*
+
+# Editores / SO
+.vscode/
+.idea/
+.DS_Store
