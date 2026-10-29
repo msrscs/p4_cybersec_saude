@@ -73,7 +73,9 @@ Regras: token temporário só vale para a etapa MFA; rate limit e bloqueio progr
 - A **DEK** é cifrada com a **KEK** e guardada junto do registro (`dek_encrypted`).
 - A **KEK** nunca fica no banco: vem de variável de ambiente (dev) ou secret manager (produção).
 - Para buscar por campo cifrado (ex.: e-mail), usar **hash determinístico com chave (HMAC-SHA256)** em coluna separada.
-- Rotação: trocar a KEK exige apenas recifrar as DEKs, não os dados.
+- Rotação: trocar a KEK exige apenas recifrar as DEKs, não os dados (`rewrap`).
+- Cada campo é cifrado com AAD (tabela, coluna, id do registro): valor movido de registro não decifra.
+- Implementação: `backend/app/core/crypto.py`; detalhes e alternativas no ADR-0004.
 
 | Dado | Proteção |
 |---|---|

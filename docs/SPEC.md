@@ -146,7 +146,7 @@ Resumo; análise completa (STRIDE) em `THREAT_MODEL.md`.
 Cada tarefa deve ser pequena, testável e entregar valor.
 - [x] T01 Estrutura do repo, docker-compose, CI com lint/testes
 - [x] T02 Migrations iniciais (usuario, log com triggers WORM)
-- [ ] T03 Módulo de criptografia (AES-GCM + envelope) com testes
+- [x] T03 Módulo de criptografia (AES-GCM + envelope) com testes
 - [ ] T04 Cadastro e login (Argon2id)
 - [ ] T05 MFA TOTP + códigos de recuperação
 - [ ] T06 Auditoria com hash encadeado + verificação

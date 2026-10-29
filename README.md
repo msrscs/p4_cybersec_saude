@@ -10,6 +10,7 @@ Docker, [uv](https://docs.astral.sh/uv/) e Node.js 26.
 ## Primeira configuração do banco
 ```bash
 cp .env.example .env                      # preencha os valores (POSTGRES_USER != app_user/migrator)
+cd backend && uv run python -m scripts.gerar_chaves && cd ..   # KEK + HMAC_KEY no .env (sem exibir)
 docker compose up -d db
 cd backend && uv run --env-file ../.env python -m scripts.bootstrap_db   # cria roles e schema
 cd .. && uv run --project backend --env-file .env alembic upgrade head   # aplica migrations
