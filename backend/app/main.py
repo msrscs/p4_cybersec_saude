@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from app.api import auth, health
+from app.api import auth, health, mfa
 from app.core.config import Settings, get_settings
 from app.core.database import criar_engine, criar_sessionmaker
 from app.core.errors import register_error_handlers
@@ -23,4 +23,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     registrar_request_id(app)
     app.include_router(health.router)
     app.include_router(auth.router)
+    app.include_router(mfa.router)
     return app
