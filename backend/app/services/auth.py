@@ -6,8 +6,6 @@
 - O token de pré-autenticação só vale para a etapa de MFA; no banco fica só o SHA-256 dele.
 """
 
-import hashlib
-import secrets
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
@@ -16,23 +14,22 @@ from sqlalchemy.orm import Session
 from app.core import senha as senha_mod
 from app.core.config import Settings
 from app.core.crypto import FinalidadeHash, hash_busca
-from app.models import Sessao, Usuario
-from app.repositories import sessao as sessao_repo
+from app.models import Usuario
 from app.repositories import usuario as usuario_repo
 from app.services import auditoria
+from app.services import sessao as sessao_svc
 from app.services.auditoria import ContextoRequisicao, Evento
 
 MAX_FALHAS = 5
 BLOQUEIO_BASE = timedelta(minutes=15)
 BLOQUEIO_MAXIMO = timedelta(hours=24)
-VALIDADE_PRE_AUTH = timedelta(minutes=5)
-ESCOPO_MFA = "mfa"
 
 
 @dataclass(frozen=True)
 class ResultadoLogin:
     sucesso: bool
     token: str | None = field(default=None, repr=False)
+    mfa_ativo: bool = False
 
 
 FALHA = ResultadoLogin(sucesso=False)
@@ -42,10 +39,6 @@ def duracao_bloqueio(bloqueios: int) -> timedelta:
     expoente = min(max(bloqueios, 1) - 1, 10)
     duracao: timedelta = BLOQUEIO_BASE * (1 << expoente)
     return min(duracao, BLOQUEIO_MAXIMO)
-
-
-def hash_token(token: str) -> bytes:
-    return hashlib.sha256(token.encode("ascii")).digest()
 
 
 def autenticar_senha(
@@ -68,7 +61,7 @@ def autenticar_senha(
         return FALHA
 
     if not senha_mod.verificar(senha, usuario.senha_hash):
-        _contar_falha(db, ctx, usuario, agora)
+        contar_falha(db, ctx, usuario, agora, motivo="senha_invalida", evento=Evento.LOGIN_FAILURE)
         return FALHA
 
     return _sucesso(db, settings, ctx, usuario, senha, agora)
@@ -90,9 +83,20 @@ def _registrar_falha(db: Session, ctx: ContextoRequisicao, cpf_hash: bytes, moti
     )
 
 
-def _contar_falha(db: Session, ctx: ContextoRequisicao, usuario: Usuario, agora: datetime) -> None:
+def contar_falha(
+    db: Session,
+    ctx: ContextoRequisicao,
+    usuario: Usuario,
+    agora: datetime,
+    *,
+    motivo: str,
+    evento: Evento,
+) -> None:
+    """Falha de senha ou de MFA: soma no mesmo contador do bloqueio progressivo."""
     usuario.falhas_login += 1
-    _registrar_falha(db, ctx, usuario.cpf_hash, "senha_invalida")
+    auditoria.registrar(
+        db, evento, ctx, cpf_usuario_hash=usuario.cpf_hash, resumo={"motivo": motivo}
+    )
     if usuario.falhas_login < MAX_FALHAS:
         return
     usuario.bloqueios += 1
@@ -122,18 +126,8 @@ def _sucesso(
     if senha_mod.precisa_rehash(usuario.senha_hash, settings.bcrypt_rounds):
         usuario.senha_hash = senha_mod.gerar_hash(senha, settings.bcrypt_rounds)
 
-    token = secrets.token_urlsafe(32)
-    sessao_repo.inserir(
-        db,
-        Sessao(
-            token_hash=hash_token(token),
-            cpf_hash=usuario.cpf_hash,
-            escopo=ESCOPO_MFA,
-            expira_em=agora + VALIDADE_PRE_AUTH,
-            ip=ctx.ip,
-        ),
-    )
+    token = sessao_svc.criar_pre_auth(db, usuario.cpf_hash, ctx, agora)
     auditoria.registrar(
         db, Evento.LOGIN_SUCCESS, ctx, cpf_usuario_hash=usuario.cpf_hash, resumo={"etapa": "senha"}
     )
-    return ResultadoLogin(sucesso=True, token=token)
+    return ResultadoLogin(sucesso=True, token=token, mfa_ativo=usuario.mfa_ativo)

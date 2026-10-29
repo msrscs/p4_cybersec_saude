@@ -14,6 +14,16 @@ class Evento(StrEnum):
     LOGIN_FAILURE = "login_failure"
     ACCOUNT_LOCKED = "account_locked"
     USER_CREATED = "user_created"
+    MFA_ENROLLED = "mfa_enrolled"
+    MFA_SUCCESS = "mfa_success"
+    MFA_FAILURE = "mfa_failure"
+    MFA_RECOVERY_USED = "mfa_recovery_used"
+    RECOVERY_CODES_GENERATED = "recovery_codes_generated"
+    SESSION_CREATED = "session_created"
+    LOGOUT = "logout"
+    # Nome de evento, não senha (falso positivo de S105/B105).
+    PASSWORD_CHANGE = "password_change"  # noqa: S105  # nosec B105
+    ACCESS_RESET = "access_reset"
 
 
 @dataclass(frozen=True)
