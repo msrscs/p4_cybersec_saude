@@ -1,0 +1,61 @@
+# Ambiente local. Segredos vêm do .env (fora do git); veja .env.example.
+x-hardening: &hardening
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  tmpfs: ["/tmp"]
+
+services:
+  db:
+    image: postgres:18
+    container_name: cybersec_saude-db
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "127.0.0.1:5433:5432"   # só acessível da sua máquina; 5433 evita o conflito
+    networks: [internal, db_host]
+    volumes:
+      - cybersec_saude_pgdata:/var/lib/postgresql
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    <<: *hardening
+    build: ./backend
+    container_name: cybersec_saude-backend
+    restart: unless-stopped
+    environment:
+      ENVIRONMENT: ${ENVIRONMENT:-dev}
+      # Role da aplicação (menor privilégio), nunca o superusuário do Postgres.
+      DATABASE_URL: ${APP_DATABASE_URL:?defina APP_DATABASE_URL no .env}
+    networks: [internal]          # sem porta publicada: só o frontend fala com a API
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    <<: *hardening
+    build: ./frontend
+    container_name: cybersec_saude-frontend
+    restart: unless-stopped
+    environment:
+      API_URL: http://backend:8000
+    ports:
+      - "127.0.0.1:3000:3000"
+    networks: [internal, web]
+    depends_on:
+      backend:
+        condition: service_healthy
+
+networks:
+  internal:
+    internal: true                # sem saída para a internet
+  web: {}
+  db_host: {}                     # apenas para publicar a porta do banco no localhost (dev)
+
+volumes:
+  cybersec_saude_pgdata:
