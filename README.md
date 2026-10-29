@@ -14,6 +14,8 @@ cd backend && uv run python -m scripts.gerar_chaves && cd ..   # KEK + HMAC_KEY 
 docker compose up -d db
 cd backend && uv run --env-file ../.env python -m scripts.bootstrap_db   # cria roles e schema
 cd .. && uv run --project backend --env-file .env alembic upgrade head   # aplica migrations
+cd backend && uv run --env-file ../.env python -m scripts.criar_usuario \
+  --cpf 000.000.000-00 --nome "Seu Nome" --email voce@recife.pe.gov.br   # senha pedida sem eco
 ```
 
 ## Subir o ambiente

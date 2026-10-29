@@ -136,7 +136,7 @@ Detalhes em `ARCHITECTURE.md`. Decisões em `/docs/adr`.
 Resumo; análise completa (STRIDE) em `THREAT_MODEL.md`.
 | Ameaça | Mitigação | Requisito |
 |---|---|---|
-| Roubo de senha | dbcrypt com salt + MFA | RF-02 |
+| Roubo de senha | bcrypt com salt + MFA | RF-02 |
 | Vazamento do banco | Criptografia de campo | RNF-02 |
 | Adulteração de logs | WORM + hash encadeado | RNF-04 |
 | Força bruta | Rate limit + bloqueio | RNF-07 |
@@ -147,7 +147,7 @@ Cada tarefa deve ser pequena, testável e entregar valor.
 - [x] T01 Estrutura do repo, docker-compose, CI com lint/testes
 - [x] T02 Migrations iniciais (usuario, log com triggers WORM)
 - [x] T03 Módulo de criptografia (AES-GCM + envelope) com testes
-- [ ] T04 Cadastro e login (Argon2id)
+- [x] T04 Cadastro e login (bcrypt, etapa CPF + senha)
 - [ ] T05 MFA TOTP + códigos de recuperação
 - [ ] T06 Auditoria com hash encadeado + verificação
 - [ ] T07 Funcionalidade principal (RF-03)
