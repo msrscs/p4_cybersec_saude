@@ -2,10 +2,11 @@
 
 A partir de backend/:
 
-    uv run python -m scripts.gerar_chaves               # cria KEK v1 e HMAC_KEY se faltarem
+    uv run python -m scripts.gerar_chaves               # cria as chaves que faltarem
     uv run python -m scripts.gerar_chaves --rotacionar  # adiciona nova KEK e a torna ativa
 
 A HMAC_KEY nunca é trocada por este script: trocá-la exige recalcular todos os hashes de busca.
+A LOG_CHECKPOINT_KEY também não: trocá-la invalida os checkpoints já gravados (ADR-0010).
 """
 
 import argparse
@@ -50,6 +51,10 @@ def atualizar_env(caminho: Path, *, rotacionar: bool) -> list[str]:
     if not _ler(linhas, "HMAC_KEY"):
         linhas = _definir(linhas, "HMAC_KEY", gerar_chave_b64())
         alteradas.append("HMAC_KEY")
+
+    if not _ler(linhas, "LOG_CHECKPOINT_KEY"):
+        linhas = _definir(linhas, "LOG_CHECKPOINT_KEY", gerar_chave_b64())
+        alteradas.append("LOG_CHECKPOINT_KEY")
 
     if alteradas:
         caminho.write_text("\n".join(linhas) + "\n")
