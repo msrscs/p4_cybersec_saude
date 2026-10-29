@@ -4,8 +4,8 @@ Projeto CyberSec- Sáude
 Acadêmico de Segurança da Informação. Segurança vem antes de funcionalidade.
 
 ## Stack
-- Frontend: Node.js (/frontend)
-- Backend: Python 3.14 + FastAPI (/backend)
+- Frontend: Node.js 26 + Express + helmet (/frontend)
+- Backend: Python 3.14 + FastAPI, dependências com uv (/backend)
 - Banco: PostgreSQL 18 (migrations em /db/migrations, via Alembic)
 - Docs: /docs (SPEC.md, ARCHITECTURE.md, THREAT_MODEL.md, /adr)
 
@@ -18,15 +18,15 @@ Acadêmico de Segurança da Informação. Segurança vem antes de funcionalidade
 6. Decisão técnica nova ou que mude algo existente: crie um ADR em `docs/adr/`.
 
 ## Comandos
-- Backend: `cd backend && pytest` | `ruff check .` | `mypy .` | `bandit -r app`
+- Backend: `cd backend && uv run pytest` | `uv run ruff check .` | `uv run mypy .` | `uv run bandit -r app` | `uv run pip-audit`
 - Frontend: `cd frontend && npm test` | `npm run lint` | `npm audit`
-- Banco: `alembic upgrade head`
+- Banco (na raiz, requer MIGRATION_DATABASE_URL): `uv run --project backend alembic upgrade head`
 - Subir tudo: `docker compose up`
 
 ## Regras de segurança (inegociáveis)
 - NUNCA hardcodar segredos, chaves ou senhas. Use variáveis de ambiente (.env fora do git).
 - NUNCA logar senhas, tokens, códigos MFA, chaves ou dados sensíveis em texto claro.
-- Senhas: Argon2id. Nunca MD5/SHA simples.
+- Senhas: bcrypt com salt, custo >= 12 (ver ADR-0003; atenção ao limite de 72 bytes). Nunca MD5/SHA simples.
 - MFA: TOTP (pyotp) obrigatório no login, com códigos de recuperação de uso único (guardados com hash).
 - Dados sensíveis: criptografia em nível de campo com AES-256-GCM (lib `cryptography`), nonce único por registro, envelope encryption (DEK cifrada por KEK). Chaves nunca ficam no banco junto dos dados.
 - SQL: apenas queries parametrizadas/ORM. Proibido concatenar strings em SQL.
