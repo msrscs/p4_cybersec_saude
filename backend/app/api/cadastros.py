@@ -7,12 +7,15 @@ from fastapi.responses import JSONResponse
 
 from app.api.auth import SEM_CACHE, Config, Ctx, erro
 from app.api.deps import Db, exigir, limitar
-from app.models import Cid, ServicoSaude, TipoUnidade, UnidadeSaude
+from app.models import Cid, ServicoSaude, TipoOci, TipoUnidade, UnidadeSaude
 from app.repositories.cadastro import Chave, Registro
 from app.schemas.auth import ErroResposta
 from app.schemas.cadastro import (
     CidAlteracao,
     CidNovo,
+    CidOpcao,
+    CidOpcoes,
+    CidOpcoesEntrada,
     CidResposta,
     CidsPagina,
     ListaEntrada,
@@ -24,7 +27,11 @@ from app.schemas.cadastro import (
     ServicosPagina,
     TipoAlteracao,
     TipoNovo,
+    TipoOciAlteracao,
+    TipoOciNovo,
+    TipoOciResposta,
     TipoResposta,
+    TiposOciPagina,
     TiposPagina,
     UnidadeAlteracao,
     UnidadeNova,
@@ -38,6 +45,7 @@ from app.services.cadastro import (
     CadastroDuplicado,
     CadastroEmUso,
     Catalogo,
+    CidInvalido,
     ServicoInvalido,
     TipoInvalido,
 )
@@ -99,6 +107,25 @@ def _cid(registro: Cid) -> CidResposta:
         cid=registro.cid,
         descricao=registro.descricao,
         status=registro.status,
+    )
+
+
+def _opcao_de_cid(registro: Cid) -> CidOpcao:
+    return CidOpcao(
+        id=registro.cid_hash.hex(),
+        cid=registro.cid,
+        descricao=registro.descricao,
+        status=registro.status,
+    )
+
+
+def _tipo_oci(registro: TipoOci) -> TipoOciResposta:
+    return TipoOciResposta(
+        id=registro.id_tipo_oci,
+        tipo_oci=registro.tipo_oci,
+        prazo_diagnostico=registro.prazo_diagnostico,
+        status=registro.status,
+        cids=[_opcao_de_cid(c) for c in registro.cids],
     )
 
 
@@ -354,3 +381,68 @@ def inativar_cid(id_cid: IdCid, atual: Gestor, db: Db, ctx: Ctx) -> Response:
 )
 def reativar_cid(id_cid: IdCid, atual: Gestor, db: Db, ctx: Ctx) -> Response:
     return _status(cadastro.CIDS, bytes.fromhex(id_cid), True, atual, db, ctx)
+
+
+@router.post("/cids/opcoes", response_model=CidOpcoes, responses=ERROS)
+def opcoes_de_cid(dados: CidOpcoesEntrada, _atual: Leitor, db: Db) -> CidOpcoes:
+    """Até 20 CIDs ativos que contenham o termo, para escolher os de um tipo de OCI."""
+    return CidOpcoes(opcoes=[_opcao_de_cid(c) for c in cadastro.opcoes_de_cid(db, dados.busca)])
+
+
+# --- Tipos de OCI ------------------------------------------------------------------------
+
+
+@router.post("/tipos-oci/lista", response_model=TiposOciPagina, responses=ERROS)
+def listar_tipos_oci(dados: ListaEntrada, _atual: Leitor, db: Db) -> TiposOciPagina:
+    pagina = cadastro.listar(db, cadastro.TIPOS_OCI, dados.busca, dados.pagina)
+    return TiposOciPagina(itens=[_tipo_oci(r) for r in pagina.itens], tem_mais=pagina.tem_mais)
+
+
+@router.post(
+    "/tipos-oci",
+    status_code=status.HTTP_201_CREATED,
+    response_model=TipoOciResposta,
+    responses=ERROS_ALVO,
+)
+def criar_tipo_oci(
+    dados: TipoOciNovo, atual: Gestor, db: Db, ctx: Ctx
+) -> TipoOciResposta | JSONResponse:
+    try:
+        return _tipo_oci(cadastro.criar_tipo_oci(db, dados.model_dump(), atual.cpf_hash, ctx))
+    except CadastroDuplicado as exc:
+        return erro(status.HTTP_409_CONFLICT, str(exc))
+    except CidInvalido as exc:
+        return erro(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc))
+
+
+@router.patch("/tipos-oci/{id_tipo_oci}", response_model=TipoOciResposta, responses=ERROS_ALVO)
+def alterar_tipo_oci(
+    id_tipo_oci: IdInteiro, dados: TipoOciAlteracao, atual: Gestor, db: Db, ctx: Ctx
+) -> TipoOciResposta | JSONResponse:
+    try:
+        registro = cadastro.atualizar_tipo_oci(
+            db, id_tipo_oci, dados.model_dump(exclude_unset=True), atual.cpf_hash, ctx
+        )
+    except CadastroDuplicado as exc:
+        return erro(status.HTTP_409_CONFLICT, str(exc))
+    except CidInvalido as exc:
+        return erro(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc))
+    if registro is None:
+        return erro(status.HTTP_404_NOT_FOUND, NAO_ENCONTRADO)
+    return _tipo_oci(registro)
+
+
+@router.delete(
+    "/tipos-oci/{id_tipo_oci}", status_code=status.HTTP_204_NO_CONTENT, responses=ERROS_ALVO
+)
+def inativar_tipo_oci(id_tipo_oci: IdInteiro, atual: Gestor, db: Db, ctx: Ctx) -> Response:
+    return _status(cadastro.TIPOS_OCI, id_tipo_oci, False, atual, db, ctx)
+
+
+@router.post(
+    "/tipos-oci/{id_tipo_oci}/reativar",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses=ERROS_ALVO,
+)
+def reativar_tipo_oci(id_tipo_oci: IdInteiro, atual: Gestor, db: Db, ctx: Ctx) -> Response:
+    return _status(cadastro.TIPOS_OCI, id_tipo_oci, True, atual, db, ctx)

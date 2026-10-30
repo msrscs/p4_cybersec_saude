@@ -271,3 +271,25 @@ class Cid(Base):
     cid: Mapped[str] = mapped_column(Text, unique=True)
     descricao: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(Text, default="ativo")
+
+
+class TipoOciCid(Base):
+    __tablename__ = "tipo_oci_cid"
+
+    fk_tipo_oci_tipo_oci_id: Mapped[int] = mapped_column(
+        ForeignKey("app.tipo_oci.id_tipo_oci"), primary_key=True
+    )
+    fk_cid_cid_hash: Mapped[bytes] = mapped_column(ForeignKey(Cid.cid_hash), primary_key=True)
+
+
+class TipoOci(Base):
+    __tablename__ = "tipo_oci"
+
+    id_tipo_oci: Mapped[int] = mapped_column(Identity(always=True), primary_key=True)
+    tipo_oci: Mapped[str] = mapped_column(Text)
+    prazo_diagnostico: Mapped[int]
+    status: Mapped[str] = mapped_column(Text, default="ativo")
+    # Só leitura: os vínculos mudam pelo repositório, para cada mudança ser auditada.
+    cids: Mapped[list[Cid]] = relationship(
+        secondary=TipoOciCid.__table__, viewonly=True, lazy="selectin", order_by=Cid.cid
+    )

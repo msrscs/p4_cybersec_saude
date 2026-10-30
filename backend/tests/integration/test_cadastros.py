@@ -1,5 +1,6 @@
 """RF-09/10/11 / THREAT_MODEL E1, T2, R1: unidades, serviços e CID (ADR-0019)."""
 
+import itertools
 import uuid
 from collections.abc import Iterator
 from typing import Any
@@ -48,19 +49,32 @@ def _servico(**extra: object) -> dict[str, object]:
     return {"nome": f"Consulta {_sufixo()}", "descricao": "Consulta especializada", **extra}
 
 
-_PROXIMO_CID = iter(range(1000))
+def _tipo_oci(**extra: object) -> dict[str, object]:
+    return {"tipo_oci": f"OCI {_sufixo()}", "prazo_diagnostico": 30, **extra}
+
+
+_PROXIMO_CID = itertools.count()
+_BASE36 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 
 def _cid(**extra: object) -> dict[str, object]:
-    # Prefixo próprio por execução: não colide entre testes nem entre rodadas.
+    # Sequencial, não aleatório: dois testes nunca geram o mesmo código na mesma rodada.
+    resto, numero = divmod(next(_PROXIMO_CID), 100)
+    alto, baixo = divmod(resto, 36)
     return {
-        "cid": f"Z{next(_PROXIMO_CID) % 100:02d}.{_sufixo()[:2].upper()}",
+        "cid": f"Z{numero:02d}.{_BASE36[alto]}{_BASE36[baixo]}",
         "descricao": "Teste",
         **extra,
     }
 
 
-NOVOS = {"tipos-unidade": _tipo, "unidades": _unidade, "servicos": _servico, "cids": _cid}
+NOVOS = {
+    "tipos-unidade": _tipo,
+    "unidades": _unidade,
+    "servicos": _servico,
+    "cids": _cid,
+    "tipos-oci": _tipo_oci,
+}
 
 
 @pytest.fixture
@@ -95,7 +109,11 @@ def test_matriz_de_permissoes(
     remover = 204 if perfil == "Administrador" else 403
     assert api.post(f"/{rota}/lista", json={}).status_code == leitura
     assert api.post(f"/{rota}", json=NOVOS[rota]()).status_code == escrita_criar
-    alteracao = {"descricao": "Outra"} if rota != "unidades" else {"endereco": "Rua Sul, 1"}
+    alteracao: dict[str, object] = {"descricao": "Outra"}
+    if rota == "unidades":
+        alteracao = {"endereco": "Rua Sul, 1"}
+    if rota == "tipos-oci":
+        alteracao = {"prazo_diagnostico": 60}
     assert api.patch(url, json=alteracao).status_code == escrita
     assert api.delete(url).status_code == remover
     assert api.post(f"{url}/reativar").status_code == remover
@@ -362,6 +380,157 @@ def test_navegador_nao_altera_servicos_da_unidade(
     assert resp.status_code == 403
 
 
+# --- Tipos de OCI e seus CIDs ------------------------------------------------------------
+
+
+def _novo_cid(api: TestClient, **extra: object) -> dict[str, Any]:
+    corpo: dict[str, Any] = api.post("/cids", json=_cid(**extra)).json()
+    return corpo
+
+
+def _codigos(tipo: dict[str, Any]) -> list[str]:
+    return [c["cid"] for c in tipo["cids"]]
+
+
+def test_tipo_oci_nasce_com_cids_em_ordem_e_aparece_na_lista(admin: TestClient) -> None:
+    b, a = _novo_cid(admin), _novo_cid(admin)
+    criado = admin.post("/tipos-oci", json=_tipo_oci(cids=[b["id"], a["id"], a["id"]]))
+    assert criado.status_code == 201
+    corpo = criado.json()
+    assert corpo["prazo_diagnostico"] == 30 and corpo["status"] == "ativo"
+    assert _codigos(corpo) == sorted([a["cid"], b["cid"]])
+    achado = admin.post("/tipos-oci/lista", json={"busca": corpo["tipo_oci"]}).json()["itens"][0]
+    assert achado == corpo
+
+
+def test_tipo_oci_sem_cids_por_padrao_e_edicao_parcial(admin: TestClient) -> None:
+    corpo = admin.post("/tipos-oci", json=_tipo_oci()).json()
+    assert corpo["cids"] == []
+    alterado = admin.patch(f"/tipos-oci/{corpo['id']}", json={"prazo_diagnostico": 90}).json()
+    assert alterado["prazo_diagnostico"] == 90 and alterado["tipo_oci"] == corpo["tipo_oci"]
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {"prazo_diagnostico": 0},
+        {"prazo_diagnostico": 3651},
+        {"prazo_diagnostico": "30 dias"},
+        {"prazo_diagnostico": None},
+        {"tipo_oci": "x"},
+        {"tipo_oci": "Nome\x00nulo"},
+        {"cids": ["abc"]},
+        {"cids": ["' OR 1=1 --"]},
+        {"cids": ["A" * 64]},
+        {"status": "inativo"},
+    ],
+)
+def test_tipo_oci_invalido(admin: TestClient, extra: dict[str, object]) -> None:
+    resp = admin.post("/tipos-oci", json=_tipo_oci(**extra))
+    assert resp.status_code == 422
+    assert "OR 1=1" not in resp.text
+
+
+def test_nome_de_tipo_oci_duplicado(admin: TestClient) -> None:
+    dados = _tipo_oci()
+    assert admin.post("/tipos-oci", json=dados).status_code == 201
+    resp = admin.post("/tipos-oci", json={**dados, "tipo_oci": str(dados["tipo_oci"]).upper()})
+    assert resp.status_code == 409
+    assert resp.json() == {"detail": "Já existe um cadastro com esses dados."}
+
+
+def test_envio_de_cids_define_o_conjunto_e_vai_para_o_log(
+    admin: TestClient, fabrica_sessao: Fabrica
+) -> None:
+    a, b, c = (_novo_cid(admin) for _ in range(3))
+    tipo = admin.post("/tipos-oci", json=_tipo_oci(cids=[a["id"], b["id"]])).json()
+    criado = _ultimo(fabrica_sessao, "catalog_created")
+    assert criado.resumo_acessado["recurso"] == "tipo_oci"
+    assert criado.resumo_acessado["cids_adicionados"] == sorted([a["cid"], b["cid"]])
+
+    url = f"/tipos-oci/{tipo['id']}"
+    corpo = admin.patch(url, json={"cids": [b["id"], c["id"]]}).json()
+    assert _codigos(corpo) == sorted([b["cid"], c["cid"]])
+    evento = _ultimo(fabrica_sessao, "catalog_updated")
+    assert evento.resumo_acessado["cids_adicionados"] == [c["cid"]]
+    assert evento.resumo_acessado["cids_removidos"] == [a["cid"]]
+
+    corpo = admin.patch(url, json={"prazo_diagnostico": 45}).json()
+    assert _codigos(corpo) == sorted([b["cid"], c["cid"]])  # sem o campo, nada muda
+    antes = _ultimo(fabrica_sessao, "catalog_updated").seq_cadeia
+    assert admin.patch(url, json={"cids": [b["id"], c["id"]]}).status_code == 200
+    assert _ultimo(fabrica_sessao, "catalog_updated").seq_cadeia == antes  # sem mudança, sem evento
+    assert admin.patch(url, json={"cids": []}).json()["cids"] == []
+
+
+def test_cid_inexistente_ou_inativo_e_recusado_sem_gravar_nada(admin: TestClient) -> None:
+    dados = _tipo_oci(cids=["0" * 64])
+    resp = admin.post("/tipos-oci", json=dados)
+    assert resp.status_code == 422
+    assert resp.json() == {"detail": "CID inválido."}
+    assert admin.post("/tipos-oci/lista", json={"busca": dados["tipo_oci"]}).json()["itens"] == []
+
+    inativo = _novo_cid(admin)
+    assert admin.delete(f"/cids/{inativo['id']}").status_code == 204
+    assert admin.post("/tipos-oci", json=_tipo_oci(cids=[inativo["id"]])).status_code == 422
+
+    tipo = admin.post("/tipos-oci", json=_tipo_oci()).json()
+    resp = admin.patch(
+        f"/tipos-oci/{tipo['id']}", json={"prazo_diagnostico": 99, "cids": [inativo["id"]]}
+    )
+    assert resp.status_code == 422
+    achado = admin.post("/tipos-oci/lista", json={"busca": tipo["tipo_oci"]}).json()["itens"][0]
+    assert achado["prazo_diagnostico"] == 30  # a falha desfaz o resto da edição
+
+
+def test_cid_em_uso_nao_inativa_e_inativo_ja_vinculado_nao_trava_edicao(
+    admin: TestClient,
+) -> None:
+    cid = _novo_cid(admin)
+    tipo = admin.post("/tipos-oci", json=_tipo_oci(cids=[cid["id"]])).json()
+    url_cid = f"/cids/{cid['id']}"
+    url = f"/tipos-oci/{tipo['id']}"
+
+    resp = admin.delete(url_cid)
+    assert resp.status_code == 409
+    assert "tipos de OCI ativos com este CID" in resp.json()["detail"]
+
+    # Tipo inativo não bloqueia o CID; ao reativar, o vínculo continua e a edição passa.
+    assert admin.delete(url).status_code == 204
+    assert admin.delete(url_cid).status_code == 204
+    assert admin.post(f"{url}/reativar").status_code == 204
+    resp = admin.patch(url, json={"prazo_diagnostico": 60, "cids": [cid["id"]]})
+    assert resp.status_code == 200
+    assert resp.json()["cids"][0]["status"] == "inativo"
+
+
+def test_opcoes_de_cid_buscam_so_ativos_e_limitam_o_resultado(admin: TestClient) -> None:
+    marca = f"Marca{_sufixo()}"
+    ativo = _novo_cid(admin, descricao=f"{marca} ativo")
+    inativo = _novo_cid(admin, descricao=f"{marca} inativo")
+    admin.delete(f"/cids/{inativo['id']}")
+    opcoes = admin.post("/cids/opcoes", json={"busca": marca}).json()["opcoes"]
+    assert [o["id"] for o in opcoes] == [ativo["id"]]
+    assert (
+        admin.post("/cids/opcoes", json={"busca": ativo["cid"]}).json()["opcoes"][0]["cid"]
+        == (ativo["cid"])
+    )
+
+    for _ in range(21):
+        _novo_cid(admin, descricao=f"{marca} lote")
+    assert len(admin.post("/cids/opcoes", json={"busca": marca}).json()["opcoes"]) == 20
+
+
+@pytest.mark.parametrize("corpo", [{}, {"busca": "a"}, {"busca": "x" * 101}, {"busca": "a\x00b"}])
+def test_opcoes_de_cid_com_entrada_invalida(admin: TestClient, corpo: dict[str, object]) -> None:
+    assert admin.post("/cids/opcoes", json=corpo).status_code == 422
+
+
+def test_opcoes_de_cid_seguem_a_leitura(logar: Logar) -> None:  # noqa: F811
+    assert logar("Navegador").api.post("/cids/opcoes", json={"busca": "Teste"}).status_code == 200
+    assert logar("Auditor").api.post("/cids/opcoes", json={"busca": "Teste"}).status_code == 403
+
+
 # --- Duplicados --------------------------------------------------------------------------
 
 
@@ -451,10 +620,13 @@ def test_lista_recusa_entrada_invalida(admin: TestClient, corpo: dict[str, objec
     assert admin.post("/unidades/lista", json=corpo).status_code == 422
 
 
-@pytest.mark.parametrize("rota", ["tipos-unidade", "unidades", "servicos"])
+@pytest.mark.parametrize("rota", ["tipos-unidade", "unidades", "servicos", "tipos-oci"])
 def test_inexistente_devolve_404(admin: TestClient, rota: str) -> None:
     url = f"/{rota}/2000000000"
-    assert admin.patch(url, json={"nome": "Outro"}).status_code == 404
+    corpo: dict[str, object] = {"nome": "Outro"}
+    if rota == "tipos-oci":
+        corpo = {"tipo_oci": "Outro"}
+    assert admin.patch(url, json=corpo).status_code == 404
     assert admin.delete(url).status_code == 404
     assert admin.post(f"{url}/reativar").status_code == 404
 
@@ -488,7 +660,9 @@ def test_escritas_auditadas_e_sem_mudanca_nao_audita(
     assert _ultimo(fabrica_sessao, "catalog_reactivated").resumo_acessado["id"] == corpo["id"]
 
 
-@pytest.mark.parametrize("tabela", ["tipo_unidade", "unidade_saude", "servico_saude", "cid"])
+@pytest.mark.parametrize(
+    "tabela", ["tipo_unidade", "unidade_saude", "servico_saude", "cid", "tipo_oci"]
+)
 def test_app_user_nao_apaga_cadastros(app_conn: Conn, tabela: str) -> None:
     comando = sql.SQL("DELETE FROM app.{}").format(sql.Identifier(tabela))
     with pytest.raises(psycopg.errors.InsufficientPrivilege):
@@ -522,6 +696,9 @@ def test_app_user_inclui_e_remove_vinculos_mas_nao_altera(app_conn: Conn) -> Non
         app_conn.execute(
             "UPDATE app.unidade_saude_servico_saude SET fk_servico_saude_id_servico = 1"
         )
+    app_conn.rollback()
+    with pytest.raises(psycopg.errors.InsufficientPrivilege):
+        app_conn.execute("UPDATE app.tipo_oci_cid SET fk_tipo_oci_tipo_oci_id = 1")
     app_conn.rollback()
 
 

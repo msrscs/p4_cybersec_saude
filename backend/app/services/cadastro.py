@@ -14,7 +14,7 @@ from sqlalchemy.orm import InstrumentedAttribute, Session
 
 from app.core.config import Settings
 from app.core.crypto import FinalidadeHash, hash_busca
-from app.models import Cid, ServicoSaude, TipoUnidade, UnidadeSaude
+from app.models import Cid, ServicoSaude, TipoOci, TipoUnidade, UnidadeSaude
 from app.repositories import cadastro as cadastro_repo
 from app.repositories.cadastro import Chave, Ordem, Registro
 from app.services import auditoria
@@ -23,6 +23,7 @@ from app.services.auditoria import ContextoRequisicao, Evento
 TAMANHO_PAGINA = 20
 LIMITE_OPCOES = 1000
 LOTE_IMPORTACAO = 500
+LIMITE_BUSCA_CID = 20
 
 
 class CadastroDuplicado(Exception):
@@ -32,6 +33,11 @@ class CadastroDuplicado(Exception):
 
 class CadastroEmUso(Exception):
     """A mensagem é exibida ao administrador e diz o que fazer antes de inativar."""
+
+
+class CidInvalido(Exception):
+    def __init__(self) -> None:
+        super().__init__("CID inválido.")
 
 
 class ServicoInvalido(Exception):
@@ -84,6 +90,7 @@ SERVICOS = Catalogo(
     _contem(ServicoSaude.nome, ServicoSaude.descricao),
 )
 CIDS = Catalogo("cid", Cid, Cid.cid, _contem(Cid.cid, Cid.descricao))
+TIPOS_OCI = Catalogo("tipo_oci", TipoOci, func.lower(TipoOci.tipo_oci), _contem(TipoOci.tipo_oci))
 
 
 @dataclass(frozen=True)
@@ -122,6 +129,44 @@ def opcoes_de_tipo(db: Session) -> list[TipoUnidade]:
 
 def opcoes_de_servico(db: Session) -> list[ServicoSaude]:
     return cadastro_repo.ativos(db, ServicoSaude, LIMITE_OPCOES)
+
+
+def opcoes_de_cid(db: Session, busca: str) -> list[Cid]:
+    return cadastro_repo.cids_ativos(db, CIDS.condicao_de_busca(busca), LIMITE_BUSCA_CID)
+
+
+def criar_tipo_oci(
+    db: Session, valores: dict[str, Any], autor: bytes, ctx: ContextoRequisicao
+) -> TipoOci:
+    campos = dict(valores)
+    cids = {bytes.fromhex(c) for c in campos.pop("cids", ())}
+    _validar_cids_ativos(db, cids)
+    registro = TipoOci(**campos)
+    _inserir(db, registro)
+    cadastro_repo.incluir_cids(db, registro.id_tipo_oci, cids)
+    db.refresh(registro)
+    extra = {"cids_adicionados": cadastro_repo.codigos_dos_cids(db, cids)} if cids else None
+    _auditar(db, Evento.CATALOG_CREATED, TIPOS_OCI, registro.id_tipo_oci, autor, ctx, extra=extra)
+    return registro
+
+
+def atualizar_tipo_oci(
+    db: Session,
+    chave: int,
+    alteracoes: dict[str, Any],
+    autor: bytes,
+    ctx: ContextoRequisicao,
+) -> TipoOci | None:
+    atual = cadastro_repo.buscar(db, TipoOci, chave, travar=True)
+    if atual is None:
+        return None
+    campos = dict(alteracoes)
+    extra = None
+    if "cids" in campos:
+        extra = _aplicar_cids(db, chave, {bytes.fromhex(c) for c in campos.pop("cids")})
+    if not campos and extra is None:
+        return atual  # só CIDs, e nada mudou: sem evento
+    return atualizar(db, TIPOS_OCI, chave, campos, autor, ctx, extra=extra)
 
 
 def criar_tipo(
@@ -328,7 +373,35 @@ def _aplicar_servicos(db: Session, id_unidade: int, desejados: set[int]) -> dict
     return {"servicos_adicionados": sorted(adicionados), "servicos_removidos": sorted(removidos)}
 
 
+def _validar_cids_ativos(db: Session, hashes: set[bytes]) -> None:
+    if hashes and cadastro_repo.hashes_de_cids_ativos_entre(db, hashes) != hashes:
+        raise CidInvalido
+
+
+def _aplicar_cids(db: Session, id_tipo_oci: int, desejados: set[bytes]) -> dict[str, Any] | None:
+    """Deixa o tipo exatamente com esses CIDs; devolve os códigos que mudaram, para o log."""
+    atuais = cadastro_repo.hashes_de_cids_do_tipo(db, id_tipo_oci)
+    adicionados, removidos = desejados - atuais, atuais - desejados
+    if not adicionados and not removidos:
+        return None
+    _validar_cids_ativos(db, adicionados)
+    cadastro_repo.incluir_cids(db, id_tipo_oci, adicionados)
+    if removidos:
+        cadastro_repo.remover_cids(db, id_tipo_oci, removidos)
+    return {
+        "cids_adicionados": cadastro_repo.codigos_dos_cids(db, adicionados),
+        "cids_removidos": cadastro_repo.codigos_dos_cids(db, removidos),
+    }
+
+
 def _garantir_sem_uso(db: Session, registro: Registro) -> None:
+    if (
+        isinstance(registro, Cid)
+        and cadastro_repo.tipos_oci_ativos_com_cid(db, registro.cid_hash) > 0
+    ):
+        raise CadastroEmUso(
+            "Há tipos de OCI ativos com este CID: remova-o deles antes de inativar."
+        )
     if (
         isinstance(registro, UnidadeSaude)
         and cadastro_repo.usuarios_ativos_na_unidade(db, registro.id_unidade) > 0
@@ -373,6 +446,8 @@ def _identificador(registro: Registro) -> int | str:
         return registro.id_unidade
     if isinstance(registro, ServicoSaude):
         return registro.id_servico
+    if isinstance(registro, TipoOci):
+        return registro.id_tipo_oci
     return registro.cid
 
 

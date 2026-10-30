@@ -5,9 +5,18 @@ from sqlalchemy import ColumnElement, delete, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import InstrumentedAttribute, Session
 
-from app.models import Cid, ServicoSaude, TipoUnidade, UnidadeSaude, UnidadeServico, Usuario
+from app.models import (
+    Cid,
+    ServicoSaude,
+    TipoOci,
+    TipoOciCid,
+    TipoUnidade,
+    UnidadeSaude,
+    UnidadeServico,
+    Usuario,
+)
 
-type Registro = TipoUnidade | UnidadeSaude | ServicoSaude | Cid
+type Registro = TipoUnidade | UnidadeSaude | ServicoSaude | Cid | TipoOci
 type Chave = int | bytes
 type Ordem = ColumnElement[Any] | InstrumentedAttribute[str]
 
@@ -55,6 +64,52 @@ def ativos[R: TipoUnidade | UnidadeSaude | ServicoSaude](
         .limit(limite)
     )
     return list(db.scalars(consulta))
+
+
+def cids_ativos(db: Session, condicao: ColumnElement[bool], limite: int) -> list[Cid]:
+    consulta = select(Cid).where(Cid.status == "ativo", condicao).order_by(Cid.cid).limit(limite)
+    return list(db.scalars(consulta))
+
+
+def hashes_de_cids_do_tipo(db: Session, id_tipo_oci: int) -> set[bytes]:
+    consulta = select(TipoOciCid.fk_cid_cid_hash).where(
+        TipoOciCid.fk_tipo_oci_tipo_oci_id == id_tipo_oci
+    )
+    return set(db.scalars(consulta))
+
+
+def incluir_cids(db: Session, id_tipo_oci: int, hashes: Iterable[bytes]) -> None:
+    linhas = [{"fk_tipo_oci_tipo_oci_id": id_tipo_oci, "fk_cid_cid_hash": h} for h in hashes]
+    if linhas:
+        db.execute(insert(TipoOciCid).values(linhas).on_conflict_do_nothing())
+
+
+def remover_cids(db: Session, id_tipo_oci: int, hashes: Iterable[bytes]) -> None:
+    db.execute(
+        delete(TipoOciCid).where(
+            TipoOciCid.fk_tipo_oci_tipo_oci_id == id_tipo_oci,
+            TipoOciCid.fk_cid_cid_hash.in_(list(hashes)),
+        )
+    )
+
+
+def hashes_de_cids_ativos_entre(db: Session, hashes: Iterable[bytes]) -> set[bytes]:
+    consulta = select(Cid.cid_hash).where(Cid.cid_hash.in_(list(hashes)), Cid.status == "ativo")
+    return set(db.scalars(consulta))
+
+
+def codigos_dos_cids(db: Session, hashes: Iterable[bytes]) -> list[str]:
+    return list(db.scalars(select(Cid.cid).where(Cid.cid_hash.in_(list(hashes))).order_by(Cid.cid)))
+
+
+def tipos_oci_ativos_com_cid(db: Session, cid_hash: bytes) -> int:
+    consulta = (
+        select(func.count())
+        .select_from(TipoOciCid)
+        .join(TipoOci, TipoOci.id_tipo_oci == TipoOciCid.fk_tipo_oci_tipo_oci_id)
+        .where(TipoOciCid.fk_cid_cid_hash == cid_hash, TipoOci.status == "ativo")
+    )
+    return int(db.scalar(consulta) or 0)
 
 
 def ids_de_servicos_da_unidade(db: Session, id_unidade: int) -> set[int]:

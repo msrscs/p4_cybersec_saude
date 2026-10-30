@@ -53,6 +53,17 @@ Busca = Annotated[
 ]
 
 
+Prazo = Annotated[int, Field(ge=1, le=3650)]
+IdsCids = Annotated[
+    list[Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]], Field(max_length=1000)
+]
+BuscaObrigatoria = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=2, max_length=100),
+    AfterValidator(sem_controle),
+]
+
+
 class _Entrada(BaseModel):
     model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
 
@@ -124,6 +135,24 @@ class CidNovo(_Entrada):
     descricao: DescricaoCid
 
 
+class CidOpcoesEntrada(_Entrada):
+    busca: BuscaObrigatoria
+
+
+class TipoOciNovo(_Entrada):
+    tipo_oci: Nome
+    prazo_diagnostico: Prazo
+    cids: IdsCids = []
+
+
+class TipoOciAlteracao(_Parcial):
+    _obrigatorios = ("tipo_oci", "prazo_diagnostico", "cids")
+
+    tipo_oci: Nome | None = None
+    prazo_diagnostico: Prazo | None = None
+    cids: IdsCids | None = None
+
+
 class CidAlteracao(_Parcial):
     """O código é imutável: identifica o registro (cid_hash) e será referenciado pelas OCIs."""
 
@@ -171,6 +200,30 @@ class CidResposta(BaseModel):
 
 class TiposPagina(BaseModel):
     itens: list[TipoResposta]
+    tem_mais: bool
+
+
+class CidOpcao(BaseModel):
+    id: str
+    cid: str
+    descricao: str
+    status: str
+
+
+class CidOpcoes(BaseModel):
+    opcoes: list[CidOpcao]
+
+
+class TipoOciResposta(BaseModel):
+    id: int
+    tipo_oci: str
+    prazo_diagnostico: int
+    status: str
+    cids: list[CidOpcao]
+
+
+class TiposOciPagina(BaseModel):
+    itens: list[TipoOciResposta]
     tem_mais: bool
 
 
