@@ -1,5 +1,6 @@
 // Área logada. A interface mostra só o que as permissões da sessão permitem, mas quem
 // autoriza de fato é o backend, a cada requisição (ADR-0011).
+import { criarAuditoria } from './auditoria.js';
 import { chamar, ErroApi, quandoSessaoExpirar } from './lib/api.js';
 import { cpfValido, formatarCpf, somenteDigitos } from './lib/cpf.js';
 import { definirStatus, el, limpar, mostrarSomente } from './lib/dom.js';
@@ -75,11 +76,14 @@ async function chamarApi(metodo, caminho, corpo) {
 
 // --- Navegação ---------------------------------------------------------------------------
 
+const aoAbrir = {};
+
 function abrir(idSecao) {
   mostrarSomente(secoes, $(idSecao));
   for (const item of document.querySelectorAll('.menu__item')) {
     item.setAttribute('aria-current', item.dataset.secao === idSecao ? 'page' : 'false');
   }
+  aoAbrir[idSecao]?.();
 }
 
 for (const item of document.querySelectorAll('.menu__item')) {
@@ -100,6 +104,7 @@ function limparDados() {
   }
   limpar($('lista-codigos'));
   limpar($('corpo-lista'));
+  limpar($('corpo-logs'));
 }
 
 // --- Troca de senha (formulário reutilizado em dois lugares) -----------------------------
@@ -417,11 +422,16 @@ async function iniciar() {
   $('menu').hidden = false;
   $('form-busca').hidden = !pode('ler');
   $('novo-paciente').hidden = !pode('criar');
-  $('sem-permissao').hidden = pode('ler') || pode('criar');
+  const temPacientes = pode('ler') || pode('criar');
+  const temLogs = permissoes.has('log:ler');
+  $('sem-permissao').hidden = temPacientes;
   $('lista-pacientes').hidden = !pode('listar');
+  $('menu-pacientes').hidden = !temPacientes && temLogs;
+  $('menu-auditoria').hidden = !temLogs;
+  if (temLogs) aoAbrir['secao-auditoria'] = criarAuditoria(chamarApi).abrir;
   avisoDeCodigos();
-  abrir('secao-pacientes');
   carregarLista();
+  abrir(temPacientes || !temLogs ? 'secao-pacientes' : 'secao-auditoria');
 }
 
 iniciar();

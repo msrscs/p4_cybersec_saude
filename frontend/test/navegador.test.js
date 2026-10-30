@@ -4,6 +4,51 @@ import { describe, it } from 'node:test';
 
 import { cabecalhos, MENSAGENS, mensagemDeErro } from '../public/js/lib/api.js';
 import { cpfValido, formatarCpf, somenteDigitos } from '../public/js/lib/cpf.js';
+import {
+  corpoDaConsulta,
+  detalhesDoRegistro,
+  periodoValido,
+  rotuloDaAcao,
+} from '../public/js/lib/logs.js';
+
+describe('auditoria', () => {
+  it('filtros vazios não vão na consulta', () => {
+    assert.deepEqual(corpoDaConsulta({ de: '', ate: '', acao: '', cpf: '' }), {});
+    assert.deepEqual(corpoDaConsulta({}, 42), { antes: 42 });
+  });
+
+  it('datas viram o início e o fim do dia local, com fuso', () => {
+    const corpo = corpoDaConsulta({ de: '2026-10-01', ate: '2026-10-02' });
+    assert.equal(corpo.de, new Date(2026, 9, 1, 0, 0, 0, 0).toISOString());
+    assert.equal(corpo.ate, new Date(2026, 9, 2, 23, 59, 59, 999).toISOString());
+  });
+
+  it('confere o período', () => {
+    assert.equal(periodoValido({ de: '2026-10-02', ate: '2026-10-01' }), false);
+    assert.equal(periodoValido({ de: '2026-10-01', ate: '2026-10-01' }), true);
+    assert.equal(periodoValido({ de: '2026-10-01', ate: '' }), true);
+  });
+
+  it('evento sem rótulo mostra o nome técnico', () => {
+    assert.equal(rotuloDaAcao('login_failure'), 'Falha de login');
+    assert.equal(rotuloDaAcao('evento_novo'), 'evento_novo');
+  });
+
+  it('detalhes juntam metadados e resumo', () => {
+    const texto = detalhesDoRegistro({
+      seq: 7,
+      hash: 'abc',
+      request_id: null,
+      resumo: { grupo: 'login:60' },
+    });
+    assert.deepEqual(JSON.parse(texto), {
+      seq: 7,
+      hash: 'abc',
+      request_id: null,
+      grupo: 'login:60',
+    });
+  });
+});
 
 describe('cabeçalhos da chamada à API', () => {
   it('envia o token CSRF só em métodos que alteram dados', () => {

@@ -8,6 +8,7 @@ import express from 'express';
 const ROTAS = [
   /^\/auth\/(login|sessao|logout|senha)$/,
   /^\/auth\/mfa\/(cadastro|ativar|verificar|recuperar|codigos)$/,
+  /^\/logs\/(consulta|acoes|integridade)$/,
   /^\/pacientes(\/busca|\/lista)?$/,
   /^\/pacientes\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(\/reativar)?$/,
 ];

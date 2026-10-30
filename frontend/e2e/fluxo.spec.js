@@ -166,6 +166,44 @@ test('códigos de recuperação: TOTP errado não derruba a sessão', async () =
   await expect(page).toHaveURL(/\/painel$/);
 });
 
+test('menu lateral fica à esquerda do conteúdo', async () => {
+  const menu = await page.locator('#menu').boundingBox();
+  const conteudo = await page.locator('#conteudo').boundingBox();
+  expect(menu.x + menu.width).toBeLessThanOrEqual(conteudo.x);
+  expect(menu.height).toBeGreaterThan(conteudo.y);
+});
+
+test('auditoria: lista, filtra por evento e por CPF, e mostra detalhes', async () => {
+  await page.getByRole('button', { name: 'Auditoria' }).click();
+  await expect(page.getByRole('heading', { name: 'Auditoria' })).toBeVisible();
+  await expect(page.locator('#integridade-selo')).toHaveText('Sem verificação');
+  const linhas = page.locator('#corpo-logs tr');
+  await expect(linhas.first()).toBeVisible();
+
+  await page.getByLabel('Evento').selectOption({ label: 'Paciente cadastrado' });
+  await page.getByRole('button', { name: 'Filtrar' }).click();
+  await expect(linhas.first().locator('td').nth(1)).toHaveText('Paciente cadastrado');
+  await expect(linhas.filter({ hasNotText: 'Paciente cadastrado' })).toHaveCount(0);
+
+  // Hash truncado na tela: nunca o CPF nem o nome do paciente.
+  await expect(linhas.first().locator('code').first()).toHaveText(/^[0-9a-f]{12}$/);
+  await expect(page.locator('#corpo-logs')).not.toContainText('Maria das Dores');
+  await expect(page.locator('#corpo-logs')).not.toContainText(CPF);
+  await linhas.first().getByText('Ver').click();
+  await expect(linhas.first().locator('pre')).toContainText('"seq"');
+
+  await page.getByLabel('CPF do usuário').fill('111.111.111-11');
+  await page.getByRole('button', { name: 'Filtrar' }).click();
+  await expect(page.locator('#status-logs')).toHaveText('Informe um CPF válido.');
+
+  await page.getByRole('button', { name: 'Limpar filtros' }).click();
+  await page.getByLabel('CPF do usuário').fill(CPF);
+  await page.getByRole('button', { name: 'Filtrar' }).click();
+  await expect(linhas.first()).toBeVisible();
+  await expect(linhas.first().locator('td').nth(1)).toHaveText('Consulta ao log');
+  await page.getByRole('button', { name: 'Limpar filtros' }).click();
+});
+
 test('HTTPS, cookie de sessão protegido e CSRF: sem token a API recusa', async () => {
   expect(new URL(page.url()).protocol).toBe('https:');
   const cookies = await page.context().cookies();

@@ -855,3 +855,144 @@ input.codigo {
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+/* Menu lateral */
+.layout {
+  display: flex;
+  align-items: flex-start;
+  min-height: calc(100vh - 57px);
+}
+
+.layout .conteudo {
+  flex: 1;
+  min-width: 0;
+  max-width: 1120px;
+}
+
+.lateral {
+  position: sticky;
+  top: 57px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 220px;
+  min-height: calc(100vh - 57px);
+  padding: 20px 12px;
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.lateral .menu__item {
+  width: 100%;
+  text-align: left;
+}
+
+@media (max-width: 800px) {
+  .layout {
+    display: block;
+  }
+
+  .lateral {
+    position: static;
+    flex-direction: row;
+    width: auto;
+    min-height: 0;
+    padding: 8px 16px;
+    overflow-x: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .lateral .menu__item {
+    width: auto;
+    white-space: nowrap;
+  }
+}
+
+/* Auditoria */
+.integridade {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  align-items: center;
+  margin: 16px 0;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.integridade h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.integridade .dica {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.selo[data-status='pendente'] {
+  color: var(--text-muted);
+  background: var(--surface-muted);
+}
+
+.filtros {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  align-items: start;
+  margin-bottom: 12px;
+}
+
+@media (max-width: 800px) {
+  .filtros {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.filtros .field {
+  margin: 0;
+}
+
+.filtros .acoes {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.filtros select,
+.filtros input {
+  height: 46px;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+}
+
+.tabela .tabela--log td:first-child {
+  width: auto;
+  white-space: nowrap;
+}
+
+.tabela--log td {
+  vertical-align: top;
+}
+
+.tabela--log summary {
+  color: var(--primary);
+  cursor: pointer;
+}
+
+.log__detalhe {
+  margin: 8px 0 0;
+  min-width: 260px;
+  max-width: 380px;
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

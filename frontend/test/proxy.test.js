@@ -95,6 +95,9 @@ describe('repasse /api para o backend', () => {
     ['POST', `/pacientes/${UUID}/reativar`],
     ['POST', '/pacientes/busca'],
     ['POST', '/pacientes/lista'],
+    ['POST', '/logs/consulta'],
+    ['GET', '/logs/acoes'],
+    ['GET', '/logs/integridade'],
     ['POST', '/auth/mfa/verificar'],
   ]) {
     it(`permite ${metodo} ${caminho}`, async () => {
@@ -115,6 +118,8 @@ describe('repasse /api para o backend', () => {
     '/pacientes/..%2fauth%2flogin',
     '/pacientes/%2e%2e/docs',
     '/auth/mfa/qualquer',
+    '/logs',
+    '/logs/qualquer',
     `/pacientes/${UUID.toUpperCase()}`,
   ]) {
     it(`recusa rota fora da lista: ${caminho}`, async () => {
