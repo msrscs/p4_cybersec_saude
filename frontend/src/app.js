@@ -49,7 +49,7 @@ export function createApp({
   app.use((_req, res, next) => {
     res.setHeader(
       'Permissions-Policy',
-      'camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), bluetooth=()',
+      'camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=()',
     );
     next();
   });
