@@ -42,7 +42,7 @@ Como usuário, quero entrar com senha + código TOTP.
 Dados do paciente.
 - [x] Criptografar dados sensíveis
 - [x] Tabela: [paciente] Campos: [cpf_hash, cpf_cripto, nome_cripto, data_nascimento_cripto, email_cripto]
-- [x] CRUD (exclusão lógica; sem listagem geral até o recorte por unidade — ADR-0011)
+- [x] CRUD (exclusão lógica; lista paginada com CPF mascarado só para Administrador e Gestor até o recorte por unidade — ADR-0011, ADR-0014)
 - [x] Conferir digitos verificador do CPF
 
 **RF-04 Consulta de logs de auditoria (auditor)**
