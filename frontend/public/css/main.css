@@ -843,8 +843,9 @@ input.codigo {
 
 .tabela td:first-child {
   width: 100%;
+  min-width: 170px;
   white-space: normal;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 .sr-only {
@@ -856,36 +857,117 @@ input.codigo {
   white-space: nowrap;
 }
 
-/* Menu lateral */
+/* Cores do painel: menos branco e bordas visíveis, para as linhas das tabelas se destacarem. */
+.app {
+  --bg: #d3e2e4;
+  --surface: #f3f8f8;
+  --surface-muted: #dde9eb;
+  --text: #0b1826;
+  --text-muted: #3a4c5c;
+  --border: #6d8a94;
+  --primary: #075e5a;
+  --primary-strong: #054a47;
+  --primary-soft: rgb(11 122 117 / 16%);
+}
+
+@media (prefers-color-scheme: dark) {
+  .app {
+    --bg: #0a1220;
+    --surface: #131f33;
+    --surface-muted: #1c2c47;
+    --text: #eef3f9;
+    --text-muted: #bccadb;
+    --border: #647b9f;
+    --primary: #2dd4bf;
+    --primary-strong: #5eead4;
+    --primary-soft: rgb(45 212 191 / 18%);
+  }
+}
+
+/* Menu lateral: mesmo verde e mesmo logotipo da tela de login */
 .layout {
   display: flex;
   align-items: flex-start;
-  min-height: calc(100vh - 57px);
+  min-height: 100vh;
+}
+
+.principal {
+  flex: 1;
+  min-width: 0;
 }
 
 .layout .conteudo {
-  flex: 1;
-  min-width: 0;
   max-width: 1120px;
+}
+
+.topo {
+  justify-content: flex-end;
+  min-height: 57px;
+}
+
+.sessao__usuario {
+  max-width: 280px;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .lateral {
   position: sticky;
-  top: 57px;
+  top: 0;
   flex: none;
   display: flex;
   flex-direction: column;
+  gap: 20px;
+  width: 232px;
+  height: 100vh;
+  padding: 18px 14px;
+  overflow: hidden auto;
+  color: #e7f6f5;
+  background:
+    radial-gradient(30rem 20rem at 110% -10%, rgb(94 234 212 / 22%), transparent 60%),
+    radial-gradient(24rem 20rem at -20% 110%, rgb(56 189 248 / 18%), transparent 60%),
+    linear-gradient(150deg, var(--panel-from), var(--panel-to));
+}
+
+.lateral__marca {
+  flex: none;
+}
+
+.lateral .logo--panel {
+  border-radius: 12px;
+  box-shadow:
+    0 10px 24px -10px rgb(0 0 0 / 45%),
+    0 0 0 4px rgb(255 255 255 / 4%);
+}
+
+.lateral__menu {
+  display: flex;
+  flex-direction: column;
   gap: 4px;
-  width: 220px;
-  min-height: calc(100vh - 57px);
-  padding: 20px 12px;
-  border-right: 1px solid var(--border);
-  background: var(--surface);
 }
 
 .lateral .menu__item {
   width: 100%;
+  color: #d5f0ec;
   text-align: left;
+}
+
+.lateral .menu__item:hover {
+  color: #fff;
+  background: rgb(255 255 255 / 10%);
+}
+
+.lateral .menu__item[aria-current='page'] {
+  color: #fff;
+  background: rgb(255 255 255 / 16%);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.lateral .menu__item:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
 }
 
 @media (max-width: 800px) {
@@ -895,19 +977,65 @@ input.codigo {
 
   .lateral {
     position: static;
-    flex-direction: row;
     width: auto;
-    min-height: 0;
-    padding: 8px 16px;
+    height: auto;
+    gap: 10px;
+    padding: 12px 16px;
+  }
+
+  .lateral .logo--panel {
+    width: 150px;
+  }
+
+  .lateral__menu {
+    flex-direction: row;
     overflow-x: auto;
-    border-right: 0;
-    border-bottom: 1px solid var(--border);
   }
 
   .lateral .menu__item {
     width: auto;
     white-space: nowrap;
   }
+
+  .sessao__usuario {
+    max-width: 130px;
+  }
+}
+
+/* Linhas das tabelas */
+.app .tabela thead {
+  background: linear-gradient(90deg, var(--panel-from), var(--panel-to));
+}
+
+.app .tabela th {
+  color: #fff;
+  background: none;
+}
+
+.app .tabela td {
+  color: var(--text);
+}
+
+.app .tabela tbody tr:nth-child(even) {
+  background: var(--surface-muted);
+}
+
+.app .tabela tbody tr:hover {
+  background: var(--primary-soft);
+}
+
+/* Log: dados e detalhes alternam em pares, então a faixa acompanha o par. */
+.app .tabela--log tbody tr:nth-child(even) {
+  background: none;
+}
+
+.app .tabela--log tbody tr:nth-child(4n + 3),
+.app .tabela--log tbody tr:nth-child(4n + 4) {
+  background: var(--surface-muted);
+}
+
+.app .tabela--log tbody tr:hover {
+  background: var(--primary-soft);
 }
 
 /* Auditoria */
@@ -976,22 +1104,37 @@ input.codigo {
 
 .tabela .tabela--log td:first-child {
   width: auto;
+  min-width: 0;
   white-space: nowrap;
+}
+
+.tabela .tabela--log .log__linha-detalhe td {
+  white-space: normal;
 }
 
 .tabela--log td {
   vertical-align: top;
 }
 
-.tabela--log summary {
-  color: var(--primary);
-  cursor: pointer;
+.log__ver {
+  font-weight: 600;
+}
+
+.log__cpf {
+  font-weight: 600;
+}
+
+.log__hash {
+  color: var(--text-muted);
 }
 
 .log__detalhe {
   margin: 8px 0 0;
-  min-width: 260px;
-  max-width: 380px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--surface);
   font-size: 0.8rem;
   white-space: pre-wrap;
   overflow-wrap: anywhere;

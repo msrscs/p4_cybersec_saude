@@ -5,28 +5,40 @@ import { corpoDaConsulta, detalhesDoRegistro, periodoValido, rotuloDaAcao } from
 
 const $ = (id) => document.getElementById(id);
 const dataHora = (iso) => new Date(iso).toLocaleString('pt-BR');
-const hashOuTraco = (valor) => (valor ? el('code', {}, valor) : '—');
+// CPF decifrado do cadastro; sem cadastro (ex.: login com CPF inexistente), o hash truncado.
+const identificacao = (cpf, hash) => {
+  if (cpf) return el('code', { class: 'log__cpf', title: `Hash: ${hash}` }, cpf);
+  return hash ? el('code', { class: 'log__hash', title: 'CPF sem cadastro' }, hash) : '—';
+};
 
-function linha(item) {
-  return el(
+// Duas linhas por registro: os dados e, ao clicar em Ver, os detalhes na largura da tabela.
+function linhas(item) {
+  const detalhe = el(
     'tr',
-    {},
+    { class: 'log__linha-detalhe', hidden: true },
+    el('td', { colspan: 6 }, el('pre', { class: 'log__detalhe' }, detalhesDoRegistro(item))),
+  );
+  const alternar = el(
+    'button',
+    { type: 'button', class: 'link link--botao log__ver', 'aria-expanded': 'false' },
+    'Ver',
+  );
+  alternar.addEventListener('click', () => {
+    detalhe.hidden = !detalhe.hidden;
+    alternar.setAttribute('aria-expanded', String(!detalhe.hidden));
+    alternar.textContent = detalhe.hidden ? 'Ver' : 'Ocultar';
+  });
+  const dados = el(
+    'tr',
+    { class: 'log__linha' },
     el('td', {}, dataHora(item.data_hora)),
     el('td', { title: item.acao }, rotuloDaAcao(item.acao)),
-    el('td', {}, hashOuTraco(item.usuario)),
-    el('td', {}, hashOuTraco(item.paciente)),
+    el('td', {}, identificacao(item.usuario_cpf, item.usuario)),
+    el('td', {}, identificacao(item.paciente_cpf, item.paciente)),
     el('td', {}, item.ip_origem ?? '—'),
-    el(
-      'td',
-      {},
-      el(
-        'details',
-        {},
-        el('summary', {}, 'Ver'),
-        el('pre', { class: 'log__detalhe' }, detalhesDoRegistro(item)),
-      ),
-    ),
+    el('td', {}, alternar),
   );
+  return [dados, detalhe];
 }
 
 function mostrarIntegridade(dados) {
@@ -70,7 +82,7 @@ export function criarAuditoria(chamarApi) {
         corpoDaConsulta(filtros, cursorAtual),
       );
       cursorProximo = proximo;
-      $('corpo-logs').replaceChildren(...itens.map(linha));
+      $('corpo-logs').replaceChildren(...itens.flatMap(linhas));
       $('logs-anterior').disabled = cursoresAnteriores.length === 0;
       $('logs-proxima').disabled = proximo === null;
       definirStatus(status, itens.length === 0 ? 'Nenhum registro encontrado.' : '');

@@ -51,7 +51,14 @@ export function periodoValido({ de, ate }) {
 /** Texto expandido de um registro: metadados técnicos e o resumo gravado no log. */
 export function detalhesDoRegistro(item) {
   return JSON.stringify(
-    { seq: item.seq, hash: item.hash, request_id: item.request_id, ...item.resumo },
+    {
+      seq: item.seq,
+      hash: item.hash,
+      usuario_hash: item.usuario,
+      paciente_hash: item.paciente,
+      request_id: item.request_id,
+      ...item.resumo,
+    },
     null,
     2,
   );

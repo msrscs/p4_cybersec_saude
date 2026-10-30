@@ -167,17 +167,19 @@ test('códigos de recuperação: TOTP errado não derruba a sessão', async () =
 });
 
 test('menu lateral fica à esquerda do conteúdo', async () => {
-  const menu = await page.locator('#menu').boundingBox();
+  const menu = await page.locator('.lateral').boundingBox();
   const conteudo = await page.locator('#conteudo').boundingBox();
   expect(menu.x + menu.width).toBeLessThanOrEqual(conteudo.x);
-  expect(menu.height).toBeGreaterThan(conteudo.y);
+  await expect(page.locator('.lateral img')).toBeVisible();
+  expect(await page.locator('.lateral img').evaluate((img) => img.naturalWidth)).toBeGreaterThan(0);
+  await expect(page.locator('#usuario-logado')).toHaveText('Admin E2E');
 });
 
 test('auditoria: lista, filtra por evento e por CPF, e mostra detalhes', async () => {
   await page.getByRole('button', { name: 'Auditoria' }).click();
   await expect(page.getByRole('heading', { name: 'Auditoria' })).toBeVisible();
   await expect(page.locator('#integridade-selo')).toHaveText('Sem verificação');
-  const linhas = page.locator('#corpo-logs tr');
+  const linhas = page.locator('#corpo-logs tr.log__linha');
   await expect(linhas.first()).toBeVisible();
 
   await page.getByLabel('Evento').selectOption({ label: 'Paciente cadastrado' });
@@ -185,12 +187,19 @@ test('auditoria: lista, filtra por evento e por CPF, e mostra detalhes', async (
   await expect(linhas.first().locator('td').nth(1)).toHaveText('Paciente cadastrado');
   await expect(linhas.filter({ hasNotText: 'Paciente cadastrado' })).toHaveCount(0);
 
-  // Hash truncado na tela: nunca o CPF nem o nome do paciente.
-  await expect(linhas.first().locator('code').first()).toHaveText(/^[0-9a-f]{12}$/);
+  // CPFs decifrados do cadastro (ADR-0016); o nome do paciente continua fora do log.
+  const cpfFormatado = `${CPF.slice(0, 3)}.${CPF.slice(3, 6)}.${CPF.slice(6, 9)}-${CPF.slice(9)}`;
+  await expect(linhas.first().locator('td').nth(2)).toHaveText(cpfFormatado);
+  await expect(linhas.first().locator('td').nth(3)).toHaveText(/^\d{3}\.\d{3}\.\d{3}-\d{2}$/);
   await expect(page.locator('#corpo-logs')).not.toContainText('Maria das Dores');
-  await expect(page.locator('#corpo-logs')).not.toContainText(CPF);
-  await linhas.first().getByText('Ver').click();
-  await expect(linhas.first().locator('pre')).toContainText('"seq"');
+  const detalhe = page.locator('#corpo-logs tr.log__linha-detalhe').first();
+  await expect(detalhe).toBeHidden();
+  await linhas.first().getByRole('button', { name: 'Ver' }).click();
+  await expect(detalhe.locator('pre')).toContainText('"seq"');
+  const larguraDetalhe = (await detalhe.locator('pre').boundingBox()).width;
+  expect(larguraDetalhe).toBeGreaterThan((await linhas.first().boundingBox()).width / 2);
+  await linhas.first().getByRole('button', { name: 'Ocultar' }).click();
+  await expect(detalhe).toBeHidden();
 
   await page.getByLabel('CPF do usuário').fill('111.111.111-11');
   await page.getByRole('button', { name: 'Filtrar' }).click();

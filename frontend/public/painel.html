@@ -10,188 +10,286 @@
     <script type="module" src="/js/painel.js"></script>
   </head>
   <body class="app">
-    <header class="topo">
-      <a class="topo__marca" href="/painel">
-        <img src="/img/icone-64.png" alt="" width="32" height="32" />
-        <span>CyberSec <strong>Saúde</strong></span>
-      </a>
-      <div class="topo__sessao">
-        <span class="sessao__tempo" id="tempo-sessao" aria-live="off"></span>
-        <button type="button" class="button button--secundario button--pequeno" id="sair">
-          Sair
-        </button>
-      </div>
-    </header>
-
     <div class="layout">
-      <nav class="lateral" aria-label="Principal" id="menu" hidden>
-        <button type="button" class="menu__item" data-secao="secao-pacientes" id="menu-pacientes">
-          Pacientes
-        </button>
-        <button
-          type="button"
-          class="menu__item"
-          data-secao="secao-auditoria"
-          id="menu-auditoria"
-          hidden
-        >
-          Auditoria
-        </button>
-        <button type="button" class="menu__item" data-secao="secao-conta">Minha conta</button>
-      </nav>
+      <aside class="lateral">
+        <a class="lateral__marca logo logo--panel" href="/painel">
+          <picture>
+            <source
+              type="image/webp"
+              srcset="/img/cybersecsaude-720.webp 720w, /img/cybersecsaude-1440.webp 1440w"
+              sizes="196px"
+            />
+            <img src="/img/cybersecsaude-720.jpg" alt="CyberSec Saúde" width="720" height="321" />
+          </picture>
+        </a>
+        <nav class="lateral__menu" aria-label="Principal" id="menu" hidden>
+          <button type="button" class="menu__item" data-secao="secao-pacientes" id="menu-pacientes">
+            Pacientes
+          </button>
+          <button
+            type="button"
+            class="menu__item"
+            data-secao="secao-auditoria"
+            id="menu-auditoria"
+            hidden
+          >
+            Auditoria
+          </button>
+          <button type="button" class="menu__item" data-secao="secao-conta">Minha conta</button>
+        </nav>
+      </aside>
 
-      <main class="conteudo" id="conteudo">
-        <p class="aviso" id="aviso" role="status" hidden></p>
-
-        <!-- Troca de senha obrigatória após reset administrativo -->
-        <section class="painel" id="secao-troca" hidden aria-labelledby="titulo-troca">
-          <h1 id="titulo-troca">Defina uma nova senha</h1>
-          <p class="painel__texto">
-            Sua senha foi redefinida por um administrador. Crie uma senha nova para continuar.
-          </p>
-          <form class="form form--estreito" data-form="senha" novalidate autocomplete="off"></form>
-        </section>
-
-        <!-- Pacientes -->
-        <section class="painel" id="secao-pacientes" hidden aria-labelledby="titulo-pacientes">
-          <div class="painel__cabecalho">
-            <h1 id="titulo-pacientes">Pacientes</h1>
-            <button type="button" class="button button--pequeno" id="novo-paciente" hidden>
-              Novo paciente
+      <div class="principal">
+        <header class="topo">
+          <div class="topo__sessao">
+            <span class="sessao__usuario" id="usuario-logado"></span>
+            <span class="sessao__tempo" id="tempo-sessao" aria-live="off"></span>
+            <button type="button" class="button button--secundario button--pequeno" id="sair">
+              Sair
             </button>
           </div>
+        </header>
 
-          <p class="painel__texto" id="sem-permissao" hidden>
-            Seu perfil não tem acesso ao cadastro de pacientes. Fale com o administrador.
-          </p>
+        <main class="conteudo" id="conteudo">
+          <p class="aviso" id="aviso" role="status" hidden></p>
 
-          <form class="busca" id="form-busca" novalidate autocomplete="off" hidden>
-            <label for="busca-cpf">Buscar por CPF</label>
-            <div class="busca__linha">
-              <input
-                id="busca-cpf"
-                type="text"
-                inputmode="numeric"
-                placeholder="000.000.000-00"
-                maxlength="14"
-                autocomplete="off"
-                required
-              />
-              <button class="button button--pequeno" type="submit">Buscar</button>
-            </div>
-            <p class="form__status" id="status-busca" role="status" aria-live="polite"></p>
-          </form>
-
-          <article class="ficha" id="ficha" hidden aria-labelledby="ficha-nome">
-            <header class="ficha__cabecalho">
-              <h2 id="ficha-nome"></h2>
-              <span class="selo" id="ficha-status"></span>
-            </header>
-            <dl class="ficha__dados">
-              <div>
-                <dt>CPF</dt>
-                <dd id="ficha-cpf"></dd>
-              </div>
-              <div>
-                <dt>Nascimento</dt>
-                <dd id="ficha-nascimento"></dd>
-              </div>
-              <div>
-                <dt>E-mail</dt>
-                <dd id="ficha-email"></dd>
-              </div>
-              <div>
-                <dt>Atualizado em</dt>
-                <dd id="ficha-atualizado"></dd>
-              </div>
-            </dl>
-            <div class="acoes">
-              <button
-                type="button"
-                class="button button--secundario button--pequeno"
-                id="editar"
-                hidden
-              >
-                Editar
-              </button>
-              <button
-                type="button"
-                class="button button--perigo button--pequeno"
-                id="inativar"
-                hidden
-              >
-                Inativar
-              </button>
-              <button
-                type="button"
-                class="button button--secundario button--pequeno"
-                id="reativar"
-                hidden
-              >
-                Reativar
-              </button>
-              <button type="button" class="link link--botao" id="fechar-ficha">Fechar</button>
-            </div>
-            <p class="form__status" id="status-ficha" role="status" aria-live="polite"></p>
-          </article>
-
-          <form class="form ficha" id="form-paciente" novalidate autocomplete="off" hidden>
-            <h2 id="titulo-form-paciente">Novo paciente</h2>
-            <div class="field" id="campo-cpf-paciente">
-              <label for="paciente-cpf">CPF</label>
-              <input
-                id="paciente-cpf"
-                type="text"
-                inputmode="numeric"
-                maxlength="14"
-                autocomplete="off"
-              />
-            </div>
-            <div class="field">
-              <label for="paciente-nome">Nome completo</label>
-              <input id="paciente-nome" type="text" maxlength="150" autocomplete="off" required />
-            </div>
-            <div class="field">
-              <label for="paciente-nascimento">Data de nascimento</label>
-              <input id="paciente-nascimento" type="date" autocomplete="off" required />
-            </div>
-            <div class="field">
-              <label for="paciente-email">E-mail (opcional)</label>
-              <input id="paciente-email" type="email" maxlength="254" autocomplete="off" />
-            </div>
-            <p class="form__status" id="status-paciente" role="status" aria-live="polite"></p>
-            <div class="acoes">
-              <button class="button button--pequeno" type="submit">Salvar</button>
-              <button class="link link--botao" type="button" id="cancelar-paciente">
-                Cancelar
-              </button>
-            </div>
-          </form>
-
-          <section class="lista" id="lista-pacientes" hidden aria-labelledby="titulo-lista">
-            <h2 id="titulo-lista">Lista de pacientes</h2>
-            <p class="dica">
-              Cadastrados mais recentemente primeiro. Abra a ficha para ver os dados.
+          <!-- Troca de senha obrigatória após reset administrativo -->
+          <section class="painel" id="secao-troca" hidden aria-labelledby="titulo-troca">
+            <h1 id="titulo-troca">Defina uma nova senha</h1>
+            <p class="painel__texto">
+              Sua senha foi redefinida por um administrador. Crie uma senha nova para continuar.
             </p>
+            <form
+              class="form form--estreito"
+              data-form="senha"
+              novalidate
+              autocomplete="off"
+            ></form>
+          </section>
+
+          <!-- Pacientes -->
+          <section class="painel" id="secao-pacientes" hidden aria-labelledby="titulo-pacientes">
+            <div class="painel__cabecalho">
+              <h1 id="titulo-pacientes">Pacientes</h1>
+              <button type="button" class="button button--pequeno" id="novo-paciente" hidden>
+                Novo paciente
+              </button>
+            </div>
+
+            <p class="painel__texto" id="sem-permissao" hidden>
+              Seu perfil não tem acesso ao cadastro de pacientes. Fale com o administrador.
+            </p>
+
+            <form class="busca" id="form-busca" novalidate autocomplete="off" hidden>
+              <label for="busca-cpf">Buscar por CPF</label>
+              <div class="busca__linha">
+                <input
+                  id="busca-cpf"
+                  type="text"
+                  inputmode="numeric"
+                  placeholder="000.000.000-00"
+                  maxlength="14"
+                  autocomplete="off"
+                  required
+                />
+                <button class="button button--pequeno" type="submit">Buscar</button>
+              </div>
+              <p class="form__status" id="status-busca" role="status" aria-live="polite"></p>
+            </form>
+
+            <article class="ficha" id="ficha" hidden aria-labelledby="ficha-nome">
+              <header class="ficha__cabecalho">
+                <h2 id="ficha-nome"></h2>
+                <span class="selo" id="ficha-status"></span>
+              </header>
+              <dl class="ficha__dados">
+                <div>
+                  <dt>CPF</dt>
+                  <dd id="ficha-cpf"></dd>
+                </div>
+                <div>
+                  <dt>Nascimento</dt>
+                  <dd id="ficha-nascimento"></dd>
+                </div>
+                <div>
+                  <dt>E-mail</dt>
+                  <dd id="ficha-email"></dd>
+                </div>
+                <div>
+                  <dt>Atualizado em</dt>
+                  <dd id="ficha-atualizado"></dd>
+                </div>
+              </dl>
+              <div class="acoes">
+                <button
+                  type="button"
+                  class="button button--secundario button--pequeno"
+                  id="editar"
+                  hidden
+                >
+                  Editar
+                </button>
+                <button
+                  type="button"
+                  class="button button--perigo button--pequeno"
+                  id="inativar"
+                  hidden
+                >
+                  Inativar
+                </button>
+                <button
+                  type="button"
+                  class="button button--secundario button--pequeno"
+                  id="reativar"
+                  hidden
+                >
+                  Reativar
+                </button>
+                <button type="button" class="link link--botao" id="fechar-ficha">Fechar</button>
+              </div>
+              <p class="form__status" id="status-ficha" role="status" aria-live="polite"></p>
+            </article>
+
+            <form class="form ficha" id="form-paciente" novalidate autocomplete="off" hidden>
+              <h2 id="titulo-form-paciente">Novo paciente</h2>
+              <div class="field" id="campo-cpf-paciente">
+                <label for="paciente-cpf">CPF</label>
+                <input
+                  id="paciente-cpf"
+                  type="text"
+                  inputmode="numeric"
+                  maxlength="14"
+                  autocomplete="off"
+                />
+              </div>
+              <div class="field">
+                <label for="paciente-nome">Nome completo</label>
+                <input id="paciente-nome" type="text" maxlength="150" autocomplete="off" required />
+              </div>
+              <div class="field">
+                <label for="paciente-nascimento">Data de nascimento</label>
+                <input id="paciente-nascimento" type="date" autocomplete="off" required />
+              </div>
+              <div class="field">
+                <label for="paciente-email">E-mail (opcional)</label>
+                <input id="paciente-email" type="email" maxlength="254" autocomplete="off" />
+              </div>
+              <p class="form__status" id="status-paciente" role="status" aria-live="polite"></p>
+              <div class="acoes">
+                <button class="button button--pequeno" type="submit">Salvar</button>
+                <button class="link link--botao" type="button" id="cancelar-paciente">
+                  Cancelar
+                </button>
+              </div>
+            </form>
+
+            <section class="lista" id="lista-pacientes" hidden aria-labelledby="titulo-lista">
+              <h2 id="titulo-lista">Lista de pacientes</h2>
+              <p class="dica">
+                Cadastrados mais recentemente primeiro. Abra a ficha para ver os dados.
+              </p>
+              <div class="tabela">
+                <table>
+                  <thead>
+                    <tr>
+                      <th scope="col">Nome</th>
+                      <th scope="col">CPF</th>
+                      <th scope="col">Situação</th>
+                      <th scope="col"><span class="sr-only">Ação</span></th>
+                    </tr>
+                  </thead>
+                  <tbody id="corpo-lista"></tbody>
+                </table>
+              </div>
+              <p class="form__status" id="status-lista" role="status" aria-live="polite"></p>
+              <div class="acoes">
+                <button
+                  type="button"
+                  class="button button--secundario button--pequeno"
+                  id="lista-anterior"
+                  disabled
+                >
+                  Anterior
+                </button>
+                <button
+                  type="button"
+                  class="button button--secundario button--pequeno"
+                  id="lista-proxima"
+                  disabled
+                >
+                  Próxima
+                </button>
+              </div>
+            </section>
+          </section>
+
+          <!-- Auditoria -->
+          <section class="painel" id="secao-auditoria" hidden aria-labelledby="titulo-auditoria">
+            <h1 id="titulo-auditoria">Auditoria</h1>
+            <p class="painel__texto">
+              Log somente leitura. CPFs sem cadastro aparecem como hash, e toda consulta fica
+              registrada.
+            </p>
+
+            <div class="integridade" id="integridade">
+              <h2>Integridade da cadeia</h2>
+              <span class="selo" id="integridade-selo"></span>
+              <p class="dica" id="integridade-texto"></p>
+            </div>
+
+            <form class="filtros" id="form-logs" novalidate autocomplete="off">
+              <div class="field">
+                <label for="log-de">De</label>
+                <input id="log-de" type="date" />
+              </div>
+              <div class="field">
+                <label for="log-ate">Até</label>
+                <input id="log-ate" type="date" />
+              </div>
+              <div class="field">
+                <label for="log-acao">Evento</label>
+                <select id="log-acao"></select>
+              </div>
+              <div class="field">
+                <label for="log-cpf">CPF do usuário</label>
+                <input
+                  id="log-cpf"
+                  type="text"
+                  inputmode="numeric"
+                  placeholder="000.000.000-00"
+                  maxlength="14"
+                  autocomplete="off"
+                />
+              </div>
+              <div class="acoes">
+                <button class="button button--pequeno" type="submit">Filtrar</button>
+                <button class="link link--botao" type="button" id="log-limpar">
+                  Limpar filtros
+                </button>
+              </div>
+            </form>
+            <p class="form__status" id="status-logs" role="status" aria-live="polite"></p>
+
             <div class="tabela">
-              <table>
+              <table class="tabela--log">
                 <thead>
                   <tr>
-                    <th scope="col">Nome</th>
-                    <th scope="col">CPF</th>
-                    <th scope="col">Situação</th>
-                    <th scope="col"><span class="sr-only">Ação</span></th>
+                    <th scope="col">Data e hora</th>
+                    <th scope="col">Evento</th>
+                    <th scope="col">Usuário</th>
+                    <th scope="col">Paciente</th>
+                    <th scope="col">IP</th>
+                    <th scope="col">Detalhes</th>
                   </tr>
                 </thead>
-                <tbody id="corpo-lista"></tbody>
+                <tbody id="corpo-logs"></tbody>
               </table>
             </div>
-            <p class="form__status" id="status-lista" role="status" aria-live="polite"></p>
             <div class="acoes">
               <button
                 type="button"
                 class="button button--secundario button--pequeno"
-                id="lista-anterior"
+                id="logs-anterior"
                 disabled
               >
                 Anterior
@@ -199,131 +297,51 @@
               <button
                 type="button"
                 class="button button--secundario button--pequeno"
-                id="lista-proxima"
+                id="logs-proxima"
                 disabled
               >
                 Próxima
               </button>
             </div>
           </section>
-        </section>
 
-        <!-- Auditoria -->
-        <section class="painel" id="secao-auditoria" hidden aria-labelledby="titulo-auditoria">
-          <h1 id="titulo-auditoria">Auditoria</h1>
-          <p class="painel__texto">
-            Log somente leitura. Usuários e pacientes aparecem como hash truncado, e toda consulta
-            fica registrada.
-          </p>
-
-          <div class="integridade" id="integridade">
-            <h2>Integridade da cadeia</h2>
-            <span class="selo" id="integridade-selo"></span>
-            <p class="dica" id="integridade-texto"></p>
-          </div>
-
-          <form class="filtros" id="form-logs" novalidate autocomplete="off">
-            <div class="field">
-              <label for="log-de">De</label>
-              <input id="log-de" type="date" />
+          <!-- Minha conta -->
+          <section class="painel" id="secao-conta" hidden aria-labelledby="titulo-conta">
+            <h1 id="titulo-conta">Minha conta</h1>
+            <div class="grade">
+              <div class="ficha">
+                <h2>Trocar senha</h2>
+                <p class="painel__texto">As outras sessões abertas serão encerradas.</p>
+                <form class="form" data-form="senha" novalidate autocomplete="off"></form>
+              </div>
+              <div class="ficha">
+                <h2>Códigos de recuperação</h2>
+                <p class="painel__texto">
+                  Gere um novo conjunto se perdeu os anteriores ou se estão acabando. Os antigos
+                  deixam de valer.
+                </p>
+                <form class="form" id="form-codigos" novalidate autocomplete="off">
+                  <div class="field">
+                    <label for="codigos-totp">Código do aplicativo</label>
+                    <input
+                      id="codigos-totp"
+                      class="codigo"
+                      type="text"
+                      inputmode="numeric"
+                      maxlength="6"
+                      autocomplete="one-time-code"
+                      required
+                    />
+                  </div>
+                  <p class="form__status" id="status-codigos" role="status" aria-live="polite"></p>
+                  <button class="button button--pequeno" type="submit">Gerar novos códigos</button>
+                </form>
+                <ol class="codigos" id="lista-codigos" hidden></ol>
+              </div>
             </div>
-            <div class="field">
-              <label for="log-ate">Até</label>
-              <input id="log-ate" type="date" />
-            </div>
-            <div class="field">
-              <label for="log-acao">Evento</label>
-              <select id="log-acao"></select>
-            </div>
-            <div class="field">
-              <label for="log-cpf">CPF do usuário</label>
-              <input
-                id="log-cpf"
-                type="text"
-                inputmode="numeric"
-                placeholder="000.000.000-00"
-                maxlength="14"
-                autocomplete="off"
-              />
-            </div>
-            <div class="acoes">
-              <button class="button button--pequeno" type="submit">Filtrar</button>
-              <button class="link link--botao" type="button" id="log-limpar">Limpar filtros</button>
-            </div>
-          </form>
-          <p class="form__status" id="status-logs" role="status" aria-live="polite"></p>
-
-          <div class="tabela">
-            <table class="tabela--log">
-              <thead>
-                <tr>
-                  <th scope="col">Data e hora</th>
-                  <th scope="col">Evento</th>
-                  <th scope="col">Usuário</th>
-                  <th scope="col">Paciente</th>
-                  <th scope="col">IP</th>
-                  <th scope="col">Detalhes</th>
-                </tr>
-              </thead>
-              <tbody id="corpo-logs"></tbody>
-            </table>
-          </div>
-          <div class="acoes">
-            <button
-              type="button"
-              class="button button--secundario button--pequeno"
-              id="logs-anterior"
-              disabled
-            >
-              Anterior
-            </button>
-            <button
-              type="button"
-              class="button button--secundario button--pequeno"
-              id="logs-proxima"
-              disabled
-            >
-              Próxima
-            </button>
-          </div>
-        </section>
-
-        <!-- Minha conta -->
-        <section class="painel" id="secao-conta" hidden aria-labelledby="titulo-conta">
-          <h1 id="titulo-conta">Minha conta</h1>
-          <div class="grade">
-            <div class="ficha">
-              <h2>Trocar senha</h2>
-              <p class="painel__texto">As outras sessões abertas serão encerradas.</p>
-              <form class="form" data-form="senha" novalidate autocomplete="off"></form>
-            </div>
-            <div class="ficha">
-              <h2>Códigos de recuperação</h2>
-              <p class="painel__texto">
-                Gere um novo conjunto se perdeu os anteriores ou se estão acabando. Os antigos
-                deixam de valer.
-              </p>
-              <form class="form" id="form-codigos" novalidate autocomplete="off">
-                <div class="field">
-                  <label for="codigos-totp">Código do aplicativo</label>
-                  <input
-                    id="codigos-totp"
-                    class="codigo"
-                    type="text"
-                    inputmode="numeric"
-                    maxlength="6"
-                    autocomplete="one-time-code"
-                    required
-                  />
-                </div>
-                <p class="form__status" id="status-codigos" role="status" aria-live="polite"></p>
-                <button class="button button--pequeno" type="submit">Gerar novos códigos</button>
-              </form>
-              <ol class="codigos" id="lista-codigos" hidden></ol>
-            </div>
-          </div>
-        </section>
-      </main>
+          </section>
+        </main>
+      </div>
     </div>
 
     <dialog class="dialogo" id="dialogo-sessao" aria-labelledby="titulo-dialogo-sessao">

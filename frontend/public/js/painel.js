@@ -408,6 +408,7 @@ async function iniciar() {
   renovarPrazo(sessao.expira_em);
   cronometro = setInterval(tick, 1000);
   tick();
+  $('usuario-logado').textContent = sessao.nome ?? '';
 
   if (sessao.troca_senha_obrigatoria) {
     montarFormSenha(document.querySelector('#secao-troca [data-form="senha"]'), 1, () =>
