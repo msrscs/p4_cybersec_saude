@@ -19,6 +19,8 @@ from .test_pacientes import Logar, logar  # noqa: F401
 
 Fabrica = sessionmaker[Session]
 Conn = psycopg.Connection[tuple[object, ...]]
+TIPO_POSTO = 1  # os 4 tipos iniciais da migration 0012, nesta ordem
+TIPO_HOSPITAL = 3
 PODEM_LER = {"Administrador", "Gestor", "Gestor do Cuidado", "Navegador"}
 PERFIS = [*sorted(PODEM_LER), "Auditor", None]
 
@@ -27,10 +29,14 @@ def _sufixo() -> str:
     return uuid.uuid4().hex[:10]
 
 
+def _tipo(**extra: object) -> dict[str, object]:
+    return {"nome": f"Tipo {_sufixo()}", "descricao": "Tipo de teste", **extra}
+
+
 def _unidade(**extra: object) -> dict[str, object]:
     return {
         "nome": f"UBS {_sufixo()}",
-        "tipo_unidade": "Posto de Saúde",
+        "id_tipo_unidade": TIPO_POSTO,
         "endereco": "Av. Norte, 100 - Recife",
         "telefone": "(81) 3355-0000",
         **extra,
@@ -53,7 +59,7 @@ def _cid(**extra: object) -> dict[str, object]:
     }
 
 
-NOVOS = {"unidades": _unidade, "servicos": _servico, "cids": _cid}
+NOVOS = {"tipos-unidade": _tipo, "unidades": _unidade, "servicos": _servico, "cids": _cid}
 
 
 @pytest.fixture
@@ -122,6 +128,9 @@ def test_unidade_normaliza_telefone_e_aparece_nas_opcoes(admin: TestClient) -> N
     "extra",
     [
         {"tipo_unidade": "Shopping"},
+        {"id_tipo_unidade": 0},
+        {"id_tipo_unidade": "Hospital"},
+        {"id_tipo_unidade": 99_999_999_999},
         {"telefone": "123"},
         {"telefone": "abc8133550000"},
         {"nome": "x"},
@@ -143,10 +152,80 @@ def test_telefone_pode_ser_removido_e_obrigatorios_nao(admin: TestClient) -> Non
     assert admin.patch(url, json={}).status_code == 422
 
 
+# --- Tipos de unidade --------------------------------------------------------------------
+
+
+def test_tipos_iniciais_e_unidade_mostra_id_e_nome_do_tipo(admin: TestClient) -> None:
+    opcoes = admin.get("/tipos-unidade/opcoes").json()["opcoes"]
+    nomes = {o["nome"]: o["id"] for o in opcoes}
+    assert {"Posto de Saúde", "Clínica", "Hospital", "Laboratório"} <= nomes.keys()
+    assert nomes["Hospital"] == TIPO_HOSPITAL
+    corpo = admin.post("/unidades", json=_unidade(id_tipo_unidade=TIPO_HOSPITAL)).json()
+    assert corpo["id_tipo_unidade"] == TIPO_HOSPITAL and corpo["tipo_unidade"] == "Hospital"
+
+
+def test_tipo_novo_pode_ser_usado_e_renomeado(admin: TestClient) -> None:
+    tipo = admin.post("/tipos-unidade", json=_tipo()).json()
+    assert {"id": tipo["id"], "nome": tipo["nome"]} in admin.get("/tipos-unidade/opcoes").json()[
+        "opcoes"
+    ]
+    unidade = admin.post("/unidades", json=_unidade(id_tipo_unidade=tipo["id"])).json()
+    assert unidade["tipo_unidade"] == tipo["nome"]
+    novo_nome = f"Renomeado {_sufixo()}"
+    admin.patch(f"/tipos-unidade/{tipo['id']}", json={"nome": novo_nome})
+    achada = admin.post("/unidades/lista", json={"busca": novo_nome}).json()["itens"]
+    assert [u["id"] for u in achada] == [unidade["id"]]
+    assert achada[0]["tipo_unidade"] == novo_nome
+
+
+def test_tipo_inexistente_ou_inativo_e_recusado(admin: TestClient) -> None:
+    resp = admin.post("/unidades", json=_unidade(id_tipo_unidade=2_000_000))
+    assert resp.status_code == 422
+    assert resp.json() == {"detail": "Tipo de unidade inválido."}
+    tipo = admin.post("/tipos-unidade", json=_tipo()).json()
+    assert admin.delete(f"/tipos-unidade/{tipo['id']}").status_code == 204
+    assert admin.post("/unidades", json=_unidade(id_tipo_unidade=tipo["id"])).status_code == 422
+    assert tipo["id"] not in {o["id"] for o in admin.get("/tipos-unidade/opcoes").json()["opcoes"]}
+
+    unidade = admin.post("/unidades", json=_unidade()).json()
+    url = f"/unidades/{unidade['id']}"
+    assert admin.patch(url, json={"id_tipo_unidade": tipo["id"]}).status_code == 422
+    assert admin.patch(url, json={"id_tipo_unidade": 2_000_000}).status_code == 422
+
+
+def test_troca_de_tipo_da_unidade(admin: TestClient) -> None:
+    unidade = admin.post("/unidades", json=_unidade()).json()
+    corpo = admin.patch(
+        f"/unidades/{unidade['id']}", json={"id_tipo_unidade": TIPO_HOSPITAL}
+    ).json()
+    assert corpo["id_tipo_unidade"] == TIPO_HOSPITAL and corpo["tipo_unidade"] == "Hospital"
+
+
+def test_tipo_em_uso_nao_inativa_e_unidade_com_tipo_inativo_continua_editavel(
+    admin: TestClient,
+) -> None:
+    tipo = admin.post("/tipos-unidade", json=_tipo()).json()
+    unidade = admin.post("/unidades", json=_unidade(id_tipo_unidade=tipo["id"])).json()
+    url_tipo = f"/tipos-unidade/{tipo['id']}"
+    url = f"/unidades/{unidade['id']}"
+
+    resp = admin.delete(url_tipo)
+    assert resp.status_code == 409
+    assert "unidades ativas deste tipo" in resp.json()["detail"]
+
+    # Com a unidade inativa, o tipo pode sair de uso; a unidade continua editável.
+    assert admin.delete(url).status_code == 204
+    assert admin.delete(url_tipo).status_code == 204
+    assert admin.post(f"{url}/reativar").status_code == 204
+    corpo = admin.patch(url, json={"endereco": "Rua Nova, 2", "id_tipo_unidade": tipo["id"]})
+    assert corpo.status_code == 200
+    assert corpo.json()["tipo_unidade"] == tipo["nome"]
+
+
 # --- Duplicados --------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("rota", ["unidades", "servicos"])
+@pytest.mark.parametrize("rota", ["tipos-unidade", "unidades", "servicos"])
 def test_nome_duplicado_recusado_sem_diferenciar_maiusculas(admin: TestClient, rota: str) -> None:
     dados = NOVOS[rota]()
     assert admin.post(f"/{rota}", json=dados).status_code == 201
@@ -232,7 +311,7 @@ def test_lista_recusa_entrada_invalida(admin: TestClient, corpo: dict[str, objec
     assert admin.post("/unidades/lista", json=corpo).status_code == 422
 
 
-@pytest.mark.parametrize("rota", ["unidades", "servicos"])
+@pytest.mark.parametrize("rota", ["tipos-unidade", "unidades", "servicos"])
 def test_inexistente_devolve_404(admin: TestClient, rota: str) -> None:
     url = f"/{rota}/2000000000"
     assert admin.patch(url, json={"nome": "Outro"}).status_code == 404
@@ -269,7 +348,7 @@ def test_escritas_auditadas_e_sem_mudanca_nao_audita(
     assert _ultimo(fabrica_sessao, "catalog_reactivated").resumo_acessado["id"] == corpo["id"]
 
 
-@pytest.mark.parametrize("tabela", ["unidade_saude", "servico_saude", "cid"])
+@pytest.mark.parametrize("tabela", ["tipo_unidade", "unidade_saude", "servico_saude", "cid"])
 def test_app_user_nao_apaga_cadastros(app_conn: Conn, tabela: str) -> None:
     comando = sql.SQL("DELETE FROM app.{}").format(sql.Identifier(tabela))
     with pytest.raises(psycopg.errors.InsufficientPrivilege):
@@ -344,11 +423,19 @@ def test_migration_preserva_codigo_de_unidade_ja_digitado(
     with banco.connect(MIGRATOR_DB_ROLE, migrator) as conn:
         nome = conn.execute("SELECT nome FROM app.unidade_saude WHERE id_unidade = 42").fetchone()
         assert nome == ("Unidade 42 (revisar cadastro)",)
+        # A migration 0012 liga a unidade antiga ao tipo equivalente.
+        tipo = conn.execute(
+            """
+            SELECT t.nome FROM app.unidade_saude u JOIN app.tipo_unidade t USING (id_tipo_unidade)
+             WHERE u.id_unidade = 42
+            """
+        ).fetchone()
+        assert tipo == ("Posto de Saúde",)
         # A sequência continua depois do código preservado: novas unidades não colidem.
         novo = conn.execute(
             """
-            INSERT INTO app.unidade_saude (tipo_unidade, nome, endereco)
-            VALUES ('Hospital', 'Nova', 'Rua A') RETURNING id_unidade
+            INSERT INTO app.unidade_saude (id_tipo_unidade, nome, endereco)
+            VALUES (3, 'Nova', 'Rua A') RETURNING id_unidade
             """
         ).fetchone()
         assert novo == (43,)

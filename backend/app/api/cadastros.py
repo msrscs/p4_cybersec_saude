@@ -1,4 +1,4 @@
-"""Cadastros de unidade, serviço e CID (RF-09/10/11, ADR-0019). Permissão RBAC em cada rota."""
+"""Cadastros de catálogo (ADR-0019, ADR-0021). Permissão RBAC em cada rota."""
 
 from typing import Annotated, Any
 
@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 
 from app.api.auth import SEM_CACHE, Config, Ctx, erro
 from app.api.deps import Db, exigir, limitar
-from app.models import Cid, ServicoSaude, UnidadeSaude
+from app.models import Cid, ServicoSaude, TipoUnidade, UnidadeSaude
 from app.repositories.cadastro import Chave, Registro
 from app.schemas.auth import ErroResposta
 from app.schemas.cadastro import (
@@ -16,12 +16,16 @@ from app.schemas.cadastro import (
     CidResposta,
     CidsPagina,
     ListaEntrada,
-    OpcaoUnidade,
-    OpcoesUnidade,
+    Opcao,
+    Opcoes,
     ServicoAlteracao,
     ServicoNovo,
     ServicoResposta,
     ServicosPagina,
+    TipoAlteracao,
+    TipoNovo,
+    TipoResposta,
+    TiposPagina,
     UnidadeAlteracao,
     UnidadeNova,
     UnidadeResposta,
@@ -30,7 +34,7 @@ from app.schemas.cadastro import (
 from app.services import cadastro
 from app.services import limite as limite_svc
 from app.services.autorizacao import Permissao
-from app.services.cadastro import CadastroDuplicado, CadastroEmUso, Catalogo
+from app.services.cadastro import CadastroDuplicado, CadastroEmUso, Catalogo, TipoInvalido
 from app.services.sessao import SessaoAtual
 
 router = APIRouter(tags=["cadastros"], dependencies=[Depends(limitar(limite_svc.GERAL))])
@@ -48,14 +52,25 @@ ERROS_ALVO: dict[int | str, dict[str, Any]] = {
     **ERROS,
     status.HTTP_404_NOT_FOUND: {"model": ErroResposta},
     status.HTTP_409_CONFLICT: {"model": ErroResposta},
+    status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": ErroResposta},
 }
+
+
+def _tipo(registro: TipoUnidade) -> TipoResposta:
+    return TipoResposta(
+        id=registro.id_tipo_unidade,
+        nome=registro.nome,
+        descricao=registro.descricao,
+        status=registro.status,
+    )
 
 
 def _unidade(registro: UnidadeSaude) -> UnidadeResposta:
     return UnidadeResposta(
         id=registro.id_unidade,
         nome=registro.nome,
-        tipo_unidade=registro.tipo_unidade,
+        id_tipo_unidade=registro.id_tipo_unidade,
+        tipo_unidade=registro.tipo.nome,
         endereco=registro.endereco,
         telefone=registro.telefone,
         status=registro.status,
@@ -109,6 +124,62 @@ def _status[R: Registro](
     return Response(status_code=status.HTTP_204_NO_CONTENT, headers=SEM_CACHE)
 
 
+# --- Tipos de unidade --------------------------------------------------------------------
+
+
+@router.post("/tipos-unidade/lista", response_model=TiposPagina, responses=ERROS)
+def listar_tipos(dados: ListaEntrada, _atual: Leitor, db: Db) -> TiposPagina:
+    pagina = cadastro.listar(db, cadastro.TIPOS_UNIDADE, dados.busca, dados.pagina)
+    return TiposPagina(itens=[_tipo(r) for r in pagina.itens], tem_mais=pagina.tem_mais)
+
+
+@router.get("/tipos-unidade/opcoes", response_model=Opcoes, responses=ERROS)
+def opcoes_de_tipo(_atual: Leitor, db: Db) -> Opcoes:
+    """Tipos ativos, para a combobox do cadastro de unidade."""
+    return Opcoes(
+        opcoes=[Opcao(id=t.id_tipo_unidade, nome=t.nome) for t in cadastro.opcoes_de_tipo(db)]
+    )
+
+
+@router.post(
+    "/tipos-unidade",
+    status_code=status.HTTP_201_CREATED,
+    response_model=TipoResposta,
+    responses=ERROS_ALVO,
+)
+def criar_tipo(dados: TipoNovo, atual: Gestor, db: Db, ctx: Ctx) -> TipoResposta | JSONResponse:
+    try:
+        return _tipo(cadastro.criar_tipo(db, dados.model_dump(), atual.cpf_hash, ctx))
+    except CadastroDuplicado as exc:
+        return erro(status.HTTP_409_CONFLICT, str(exc))
+
+
+@router.patch("/tipos-unidade/{id_tipo}", response_model=TipoResposta, responses=ERROS_ALVO)
+def alterar_tipo(
+    id_tipo: IdInteiro, dados: TipoAlteracao, atual: Gestor, db: Db, ctx: Ctx
+) -> TipoResposta | JSONResponse:
+    resultado = _alterar(
+        cadastro.TIPOS_UNIDADE, id_tipo, dados.model_dump(exclude_unset=True), atual, db, ctx
+    )
+    return resultado if isinstance(resultado, JSONResponse) else _tipo(resultado)
+
+
+@router.delete(
+    "/tipos-unidade/{id_tipo}", status_code=status.HTTP_204_NO_CONTENT, responses=ERROS_ALVO
+)
+def inativar_tipo(id_tipo: IdInteiro, atual: Gestor, db: Db, ctx: Ctx) -> Response:
+    return _status(cadastro.TIPOS_UNIDADE, id_tipo, False, atual, db, ctx)
+
+
+@router.post(
+    "/tipos-unidade/{id_tipo}/reativar",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses=ERROS_ALVO,
+)
+def reativar_tipo(id_tipo: IdInteiro, atual: Gestor, db: Db, ctx: Ctx) -> Response:
+    return _status(cadastro.TIPOS_UNIDADE, id_tipo, True, atual, db, ctx)
+
+
 # --- Unidades de saúde -------------------------------------------------------------------
 
 
@@ -118,11 +189,11 @@ def listar_unidades(dados: ListaEntrada, _atual: Leitor, db: Db) -> UnidadesPagi
     return UnidadesPagina(itens=[_unidade(r) for r in pagina.itens], tem_mais=pagina.tem_mais)
 
 
-@router.get("/unidades/opcoes", response_model=OpcoesUnidade, responses=ERROS)
-def opcoes_de_unidade(_atual: Leitor, db: Db) -> OpcoesUnidade:
+@router.get("/unidades/opcoes", response_model=Opcoes, responses=ERROS)
+def opcoes_de_unidade(_atual: Leitor, db: Db) -> Opcoes:
     """Unidades ativas, para a combobox do cadastro de usuário."""
-    return OpcoesUnidade(
-        opcoes=[OpcaoUnidade(id=u.id_unidade, nome=u.nome) for u in cadastro.opcoes_de_unidade(db)]
+    return Opcoes(
+        opcoes=[Opcao(id=u.id_unidade, nome=u.nome) for u in cadastro.opcoes_de_unidade(db)]
     )
 
 
@@ -139,16 +210,25 @@ def criar_unidade(
         return _unidade(cadastro.criar_unidade(db, dados.model_dump(), atual.cpf_hash, ctx))
     except CadastroDuplicado as exc:
         return erro(status.HTTP_409_CONFLICT, str(exc))
+    except TipoInvalido as exc:
+        return erro(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc))
 
 
 @router.patch("/unidades/{id_unidade}", response_model=UnidadeResposta, responses=ERROS_ALVO)
 def alterar_unidade(
     id_unidade: IdInteiro, dados: UnidadeAlteracao, atual: Gestor, db: Db, ctx: Ctx
 ) -> UnidadeResposta | JSONResponse:
-    resultado = _alterar(
-        cadastro.UNIDADES, id_unidade, dados.model_dump(exclude_unset=True), atual, db, ctx
-    )
-    return resultado if isinstance(resultado, JSONResponse) else _unidade(resultado)
+    try:
+        registro = cadastro.atualizar_unidade(
+            db, id_unidade, dados.model_dump(exclude_unset=True), atual.cpf_hash, ctx
+        )
+    except CadastroDuplicado as exc:
+        return erro(status.HTTP_409_CONFLICT, str(exc))
+    except TipoInvalido as exc:
+        return erro(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc))
+    if registro is None:
+        return erro(status.HTTP_404_NOT_FOUND, NAO_ENCONTRADO)
+    return _unidade(registro)
 
 
 @router.delete(

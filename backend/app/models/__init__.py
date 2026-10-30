@@ -6,7 +6,7 @@ from typing import Any
 
 from sqlalchemy import BigInteger, FetchedValue, ForeignKey, Identity, MetaData, SmallInteger, Text
 from sqlalchemy.dialects.postgresql import BYTEA, INET, JSONB, TIMESTAMP, UUID
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 class Base(DeclarativeBase):
@@ -207,11 +207,21 @@ class LimiteRequisicao(Base):
 # --- Cadastros de catálogo (RF-09/10/11). Dados públicos: sem cifragem.
 
 
+class TipoUnidade(Base):
+    __tablename__ = "tipo_unidade"
+
+    id_tipo_unidade: Mapped[int] = mapped_column(Identity(always=True), primary_key=True)
+    nome: Mapped[str] = mapped_column(Text)
+    descricao: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(Text, default="ativo")
+
+
 class UnidadeSaude(Base):
     __tablename__ = "unidade_saude"
 
     id_unidade: Mapped[int] = mapped_column(Identity(always=True), primary_key=True)
-    tipo_unidade: Mapped[str] = mapped_column(Text)
+    id_tipo_unidade: Mapped[int] = mapped_column(ForeignKey(TipoUnidade.id_tipo_unidade))
+    tipo: Mapped[TipoUnidade] = relationship(lazy="selectin")
     nome: Mapped[str] = mapped_column(Text)
     endereco: Mapped[str] = mapped_column(Text)
     telefone: Mapped[str | None] = mapped_column(Text)

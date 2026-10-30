@@ -46,7 +46,7 @@ def _unidade(api: TestClient) -> int:
         "/unidades",
         json={
             "nome": f"Unidade {uuid.uuid4().hex}",
-            "tipo_unidade": "Hospital",
+            "id_tipo_unidade": 1,  # tipo inicial da migration 0012
             "endereco": "Rua das Flores, 10",
         },
     )

@@ -1,5 +1,5 @@
 import re
-from typing import Annotated, Literal, Self
+from typing import Annotated, Self
 
 from pydantic import (
     AfterValidator,
@@ -12,7 +12,7 @@ from pydantic import (
 
 from app.schemas.validadores import Nome, sem_controle
 
-TipoUnidade = Literal["Posto de Saúde", "Clínica", "Hospital", "Laboratório"]
+IdTipo = Annotated[int, Field(ge=1, le=2_147_483_647)]
 _CID = re.compile(r"[A-Z][0-9]{2}(\.[0-9A-Z]{1,2})?")
 
 
@@ -76,18 +76,30 @@ class ListaEntrada(_Entrada):
     busca: Busca | None = None
 
 
+class TipoNovo(_Entrada):
+    nome: Nome
+    descricao: Descricao = ""
+
+
+class TipoAlteracao(_Parcial):
+    _obrigatorios = ("nome", "descricao")
+
+    nome: Nome | None = None
+    descricao: Descricao | None = None
+
+
 class UnidadeNova(_Entrada):
     nome: Nome
-    tipo_unidade: TipoUnidade
+    id_tipo_unidade: IdTipo
     endereco: Endereco
     telefone: Telefone | None = None
 
 
 class UnidadeAlteracao(_Parcial):
-    _obrigatorios = ("nome", "tipo_unidade", "endereco")
+    _obrigatorios = ("nome", "id_tipo_unidade", "endereco")
 
     nome: Nome | None = None
-    tipo_unidade: TipoUnidade | None = None
+    id_tipo_unidade: IdTipo | None = None
     endereco: Endereco | None = None
     telefone: Telefone | None = None
 
@@ -117,9 +129,17 @@ class CidAlteracao(_Parcial):
     descricao: DescricaoCid | None = None
 
 
+class TipoResposta(BaseModel):
+    id: int
+    nome: str
+    descricao: str
+    status: str
+
+
 class UnidadeResposta(BaseModel):
     id: int
     nome: str
+    id_tipo_unidade: int
     tipo_unidade: str
     endereco: str
     telefone: str | None
@@ -140,6 +160,11 @@ class CidResposta(BaseModel):
     status: str
 
 
+class TiposPagina(BaseModel):
+    itens: list[TipoResposta]
+    tem_mais: bool
+
+
 class UnidadesPagina(BaseModel):
     itens: list[UnidadeResposta]
     tem_mais: bool
@@ -155,10 +180,10 @@ class CidsPagina(BaseModel):
     tem_mais: bool
 
 
-class OpcaoUnidade(BaseModel):
+class Opcao(BaseModel):
     id: int
     nome: str
 
 
-class OpcoesUnidade(BaseModel):
-    opcoes: list[OpcaoUnidade]
+class Opcoes(BaseModel):
+    opcoes: list[Opcao]

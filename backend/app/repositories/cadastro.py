@@ -1,13 +1,13 @@
 from collections.abc import Sequence
 from typing import Any
 
-from sqlalchemy import ColumnElement, func, or_, select
+from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import InstrumentedAttribute, Session
 
-from app.models import Cid, ServicoSaude, UnidadeSaude, Usuario
+from app.models import Cid, ServicoSaude, TipoUnidade, UnidadeSaude, Usuario
 
-type Registro = UnidadeSaude | ServicoSaude | Cid
+type Registro = TipoUnidade | UnidadeSaude | ServicoSaude | Cid
 type Chave = int | bytes
 type Ordem = ColumnElement[Any] | InstrumentedAttribute[str]
 
@@ -17,17 +17,13 @@ def listar[R: Registro](
     modelo: type[R],
     *,
     ordem: Ordem,
-    colunas_busca: Sequence[InstrumentedAttribute[str]],
-    busca: str | None,
+    condicao: ColumnElement[bool] | None,
     limite: int,
     deslocamento: int,
 ) -> list[R]:
     consulta = select(modelo).order_by(ordem).limit(limite).offset(deslocamento)
-    if busca:
-        # autoescape: % e _ digitados são texto, não curinga.
-        consulta = consulta.where(
-            or_(*(coluna.icontains(busca, autoescape=True) for coluna in colunas_busca))
-        )
+    if condicao is not None:
+        consulta = consulta.where(condicao)
     return list(db.scalars(consulta))
 
 
@@ -56,6 +52,25 @@ def unidades_ativas(db: Session, limite: int) -> list[UnidadeSaude]:
         .limit(limite)
     )
     return list(db.scalars(consulta))
+
+
+def tipos_ativos(db: Session, limite: int) -> list[TipoUnidade]:
+    consulta = (
+        select(TipoUnidade)
+        .where(TipoUnidade.status == "ativo")
+        .order_by(func.lower(TipoUnidade.nome))
+        .limit(limite)
+    )
+    return list(db.scalars(consulta))
+
+
+def unidades_ativas_do_tipo(db: Session, id_tipo_unidade: int) -> int:
+    consulta = (
+        select(func.count())
+        .select_from(UnidadeSaude)
+        .where(UnidadeSaude.id_tipo_unidade == id_tipo_unidade, UnidadeSaude.status == "ativo")
+    )
+    return int(db.scalar(consulta) or 0)
 
 
 def usuarios_ativos_na_unidade(db: Session, id_unidade: int) -> int:
