@@ -95,7 +95,7 @@ Regras (ADR-0002, 0008, 0009): token temporário só vale para a etapa MFA; sess
 - Role da aplicação (`app_user`) com **apenas INSERT e SELECT** na tabela. Migrations rodam com outra role.
 - **Hash encadeado** (ADR-0010): a trigger `log_encadear` calcula `hash = SHA-256(prev_hash + conteúdo)` sob lock, na ordem de `seq_cadeia`. Alterar um registro quebra todos os seguintes.
 - **Verificação da cadeia:** `scripts.verificar_log` recalcula tudo em Python (sem confiar na função do banco). O container `tarefas` executa a verificação a cada hora, e a tela de auditoria mostra o último resultado.
-- **Consulta:** só leitura, com permissão `log:ler` (Auditor e Administrador), filtros por data, usuário e evento, hashes truncados e leitura auditada (ADR-0015).
+- **Consulta:** só leitura, com permissão `log:ler` (Auditor e Administrador), filtros por data, usuário e evento e leitura auditada (ADR-0015). O log guarda só hashes; o CPF exibido vem dos cadastros, decifrado na hora de responder (ADR-0016).
 - **Checkpoints assinados** (`log_checkpoint`, HMAC com chave fora do banco) e **âncora** impressa para guardar fora do sistema: revelam a remoção do fim do log.
 - Opcional (nível avançado): exportar periodicamente para armazenamento com *object lock*.
 - Nenhum dado sensível dentro do log.
