@@ -805,3 +805,53 @@ input.codigo {
     grid-template-columns: 1fr;
   }
 }
+
+.lista {
+  margin-top: 28px;
+}
+
+.tabela {
+  overflow-x: auto;
+  margin: 12px 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.tabela table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.tabela th,
+.tabela td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.tabela th {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  background: var(--surface-muted);
+}
+
+.tabela tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.tabela td:first-child {
+  width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

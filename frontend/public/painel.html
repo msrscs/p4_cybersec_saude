@@ -154,6 +154,45 @@
             <button class="link link--botao" type="button" id="cancelar-paciente">Cancelar</button>
           </div>
         </form>
+
+        <section class="lista" id="lista-pacientes" hidden aria-labelledby="titulo-lista">
+          <h2 id="titulo-lista">Lista de pacientes</h2>
+          <p class="dica">
+            Cadastrados mais recentemente primeiro. Abra a ficha para ver os dados.
+          </p>
+          <div class="tabela">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Nome</th>
+                  <th scope="col">CPF</th>
+                  <th scope="col">Situação</th>
+                  <th scope="col"><span class="sr-only">Ação</span></th>
+                </tr>
+              </thead>
+              <tbody id="corpo-lista"></tbody>
+            </table>
+          </div>
+          <p class="form__status" id="status-lista" role="status" aria-live="polite"></p>
+          <div class="acoes">
+            <button
+              type="button"
+              class="button button--secundario button--pequeno"
+              id="lista-anterior"
+              disabled
+            >
+              Anterior
+            </button>
+            <button
+              type="button"
+              class="button button--secundario button--pequeno"
+              id="lista-proxima"
+              disabled
+            >
+              Próxima
+            </button>
+          </div>
+        </section>
       </section>
 
       <!-- Minha conta -->

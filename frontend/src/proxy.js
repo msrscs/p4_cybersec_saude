@@ -8,7 +8,7 @@ import express from 'express';
 const ROTAS = [
   /^\/auth\/(login|sessao|logout|senha)$/,
   /^\/auth\/mfa\/(cadastro|ativar|verificar|recuperar|codigos)$/,
-  /^\/pacientes(\/busca)?$/,
+  /^\/pacientes(\/busca|\/lista)?$/,
   /^\/pacientes\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(\/reativar)?$/,
 ];
 const METODOS = new Set(['GET', 'POST', 'PATCH', 'DELETE']);

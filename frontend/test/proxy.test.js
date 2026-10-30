@@ -94,6 +94,7 @@ describe('repasse /api para o backend', () => {
     ['DELETE', `/pacientes/${UUID}`],
     ['POST', `/pacientes/${UUID}/reativar`],
     ['POST', '/pacientes/busca'],
+    ['POST', '/pacientes/lista'],
     ['POST', '/auth/mfa/verificar'],
   ]) {
     it(`permite ${metodo} ${caminho}`, async () => {

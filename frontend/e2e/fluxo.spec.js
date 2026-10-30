@@ -90,7 +90,7 @@ test('primeiro acesso: cadastro do MFA e códigos de recuperação', async () =>
   await page.getByLabel('Guardei meus códigos em local seguro.').check();
   await continuar.click();
   await expect(page).toHaveURL(/\/painel$/);
-  await expect(page.getByRole('heading', { name: 'Pacientes' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Pacientes', exact: true })).toBeVisible();
   await expect(page.locator('#tempo-sessao')).toHaveText(/Sessão: 1[45]:\d\d/);
 });
 
@@ -135,6 +135,16 @@ test('paciente: cadastrar, buscar, editar, inativar e reativar', async () => {
   await expect(page.locator('#status-busca')).toHaveText('Paciente não encontrado.');
 });
 
+test('lista: mostra o paciente com CPF mascarado e abre a ficha', async () => {
+  const linha = page.locator('#corpo-lista tr', { hasText: 'Maria das Dores Silva' });
+  await expect(linha).toBeVisible();
+  await expect(linha.locator('code')).toHaveText(/^\*\*\*\.\d{3}\.\d{3}-\*\*$/);
+  await linha.getByRole('button', { name: /Abrir ficha/ }).click();
+  await expect(page.locator('#ficha-nome')).toHaveText('Maria das Dores Silva');
+  await expect(page.locator('#ficha-cpf')).toHaveText(/^\d{3}\.\d{3}\.\d{3}-\d{2}$/);
+  await page.getByRole('button', { name: 'Fechar' }).click();
+});
+
 test('nome com HTML aparece como texto (sem XSS)', async () => {
   const malicioso = '<img src=x onerror=alert(1)>Zé';
   await page.getByRole('button', { name: 'Novo paciente' }).click();
@@ -144,6 +154,8 @@ test('nome com HTML aparece como texto (sem XSS)', async () => {
   await page.getByRole('button', { name: 'Salvar' }).click();
   await expect(page.locator('#ficha-nome')).toHaveText(malicioso);
   await expect(page.locator('#ficha img')).toHaveCount(0);
+  await expect(page.locator('#corpo-lista tr').first().locator('td').first()).toHaveText(malicioso);
+  await expect(page.locator('#corpo-lista img')).toHaveCount(0);
 });
 
 test('códigos de recuperação: TOTP errado não derruba a sessão', async () => {
@@ -185,5 +197,5 @@ test('novo login pede o código do aplicativo', async () => {
     .fill(await codigoNovo());
   await page.getByRole('button', { name: 'Confirmar' }).click();
   await expect(page).toHaveURL(/\/painel$/);
-  await expect(page.getByRole('heading', { name: 'Pacientes' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Pacientes', exact: true })).toBeVisible();
 });

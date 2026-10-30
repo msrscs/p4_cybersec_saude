@@ -99,6 +99,7 @@ function limparDados() {
     $(id).textContent = '';
   }
   limpar($('lista-codigos'));
+  limpar($('corpo-lista'));
 }
 
 // --- Troca de senha (formulário reutilizado em dois lugares) -----------------------------
@@ -200,6 +201,82 @@ $('form-busca').addEventListener('submit', async (evento) => {
   }
 });
 
+// --- Lista de pacientes (ADR-0014) ---------------------------------------------------------
+
+let cursorAtual = null;
+let cursorProximo = null;
+const cursoresAnteriores = [];
+
+async function abrirDaLista(id) {
+  const status = $('status-lista');
+  definirStatus(status, '');
+  $('form-paciente').hidden = true;
+  try {
+    mostrarFicha(await chamarApi('GET', `/pacientes/${encodeURIComponent(id)}`));
+    $('ficha').scrollIntoView();
+  } catch (erro) {
+    definirStatus(status, erro.message, 'error');
+  }
+}
+
+function linhaDaLista(paciente) {
+  return el(
+    'tr',
+    {},
+    el('td', {}, paciente.nome),
+    el('td', {}, el('code', {}, paciente.cpf_mascarado)),
+    el(
+      'td',
+      {},
+      el(
+        'span',
+        { class: 'selo', dataset: { status: paciente.status } },
+        paciente.status === 'ativo' ? 'Ativo' : 'Inativo',
+      ),
+    ),
+    el(
+      'td',
+      {},
+      el(
+        'button',
+        {
+          type: 'button',
+          class: 'link link--botao',
+          'aria-label': `Abrir ficha de ${paciente.nome}`,
+          onclick: () => abrirDaLista(paciente.id),
+        },
+        'Abrir',
+      ),
+    ),
+  );
+}
+
+async function carregarLista() {
+  if (!pode('listar')) return;
+  const status = $('status-lista');
+  try {
+    const { itens, proximo } = await chamarApi('POST', '/pacientes/lista', { depois: cursorAtual });
+    cursorProximo = proximo;
+    $('corpo-lista').replaceChildren(...itens.map(linhaDaLista));
+    $('lista-anterior').disabled = cursoresAnteriores.length === 0;
+    $('lista-proxima').disabled = proximo === null;
+    definirStatus(status, itens.length === 0 ? 'Nenhum paciente cadastrado.' : '');
+  } catch (erro) {
+    definirStatus(status, erro.message, 'error');
+  }
+}
+
+$('lista-proxima').addEventListener('click', () => {
+  cursoresAnteriores.push(cursorAtual);
+  cursorAtual = cursorProximo;
+  carregarLista();
+});
+
+$('lista-anterior').addEventListener('click', () => {
+  cursorAtual = cursoresAnteriores.pop() ?? null;
+  carregarLista();
+});
+
 function abrirFormPaciente(paciente = null) {
   fecharFicha();
   const form = $('form-paciente');
@@ -252,6 +329,7 @@ $('form-paciente').addEventListener('submit', async (evento) => {
     form.reset();
     mostrarFicha(salvo);
     definirStatus($('status-ficha'), id ? 'Dados atualizados.' : 'Paciente cadastrado.');
+    carregarLista();
   } catch (erro) {
     definirStatus(status, erro.message, 'error');
   }
@@ -265,6 +343,7 @@ async function alterarStatus(ativar) {
     else await chamarApi('DELETE', `/pacientes/${id}`);
     mostrarFicha(await chamarApi('GET', `/pacientes/${id}`));
     definirStatus($('status-ficha'), ativar ? 'Paciente reativado.' : 'Paciente inativado.');
+    carregarLista();
   } catch (erro) {
     definirStatus($('status-ficha'), erro.message, 'error');
   }
@@ -339,8 +418,10 @@ async function iniciar() {
   $('form-busca').hidden = !pode('ler');
   $('novo-paciente').hidden = !pode('criar');
   $('sem-permissao').hidden = pode('ler') || pode('criar');
+  $('lista-pacientes').hidden = !pode('listar');
   avisoDeCodigos();
   abrir('secao-pacientes');
+  carregarLista();
 }
 
 iniciar();
