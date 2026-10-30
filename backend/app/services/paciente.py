@@ -27,6 +27,7 @@ from app.services import auditoria
 from app.services.auditoria import ContextoRequisicao, Evento
 
 _TABELA = "paciente"
+TAMANHO_PAGINA = 20  # fixo: o cliente não escolhe quantos registros decifrar por requisição
 
 
 class ErroCadastroPaciente(Exception):
@@ -56,6 +57,22 @@ class DadosPaciente:
     status: str
     criado_em: datetime
     atualizado_em: datetime
+
+
+@dataclass(frozen=True)
+class ResumoPaciente:
+    """Só o necessário para reconhecer o paciente na lista (minimização, ADR-0014)."""
+
+    id_publico: uuid.UUID
+    cpf: str = field(repr=False)
+    nome: str = field(repr=False)
+    status: str
+
+
+@dataclass(frozen=True)
+class PaginaPacientes:
+    itens: list[ResumoPaciente]
+    proximo: uuid.UUID | None
 
 
 @dataclass(frozen=True)
@@ -128,6 +145,38 @@ def obter(
     if paciente is None:
         return None
     return _ler(db, settings, paciente, autor, ctx, origem="consulta")
+
+
+def listar(
+    db: Session,
+    settings: Settings,
+    depois: uuid.UUID | None,
+    autor: bytes,
+    ctx: ContextoRequisicao,
+) -> PaginaPacientes:
+    """Uma página da lista. Decifra só nome e CPF, e audita quais pacientes foram exibidos."""
+    referencia = None
+    if depois is not None:
+        referencia = paciente_repo.buscar_por_id(db, depois)
+        if referencia is None:  # cursor que não veio desta API
+            return PaginaPacientes(itens=[], proximo=None)
+    linhas = paciente_repo.listar(db, limite=TAMANHO_PAGINA + 1, depois=referencia)
+    pagina = linhas[:TAMANHO_PAGINA]
+    auditoria.registrar(
+        db,
+        Evento.SENSITIVE_DATA_ACCESS,
+        ctx,
+        cpf_usuario_hash=autor,
+        resumo={
+            "recurso": _TABELA,
+            "origem": "lista",
+            "pacientes": [str(p.id_publico) for p in pagina],
+        },
+    )
+    return PaginaPacientes(
+        itens=[_resumir(settings, p) for p in pagina],
+        proximo=pagina[-1].id_publico if len(linhas) > TAMANHO_PAGINA else None,
+    )
 
 
 def atualizar(
@@ -218,6 +267,21 @@ def _cifrar(dek: bytes, cpf_hash: bytes, coluna: str, valor: str) -> bytes:
 
 def _cifrar_opcional(dek: bytes, cpf_hash: bytes, coluna: str, valor: str | None) -> bytes | None:
     return None if valor is None else _cifrar(dek, cpf_hash, coluna, valor)
+
+
+def _resumir(settings: Settings, paciente: Paciente) -> ResumoPaciente:
+    dek = _dek(settings, paciente)
+    chave = paciente.cpf_hash
+    return ResumoPaciente(
+        id_publico=paciente.id_publico,
+        cpf=decifrar_campo(
+            dek, paciente.cpf_cripto, tabela=_TABELA, coluna="cpf_cripto", id_registro=chave
+        ),
+        nome=decifrar_campo(
+            dek, paciente.nome_cripto, tabela=_TABELA, coluna="nome_cripto", id_registro=chave
+        ),
+        status=paciente.status,
+    )
 
 
 def _decifrar(settings: Settings, paciente: Paciente) -> DadosPaciente:

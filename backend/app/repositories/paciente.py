@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import literal, select, tuple_
 from sqlalchemy.orm import Session
 
 from app.models import Paciente
@@ -20,6 +20,21 @@ def inserir(db: Session, paciente: Paciente) -> None:
 
 def buscar_por_cpf_hash(db: Session, cpf_hash: bytes) -> Paciente | None:
     return db.get(Paciente, cpf_hash)
+
+
+def listar(db: Session, *, limite: int, depois: Paciente | None = None) -> list[Paciente]:
+    """Mais recentes primeiro, por cursor: o nome é cifrado e não pode ser ordenado no banco."""
+    consulta = (
+        select(Paciente)
+        .order_by(Paciente.criado_em.desc(), Paciente.id_publico.desc())
+        .limit(limite)
+    )
+    if depois is not None:
+        consulta = consulta.where(
+            tuple_(Paciente.criado_em, Paciente.id_publico)
+            < tuple_(literal(depois.criado_em), literal(depois.id_publico))
+        )
+    return list(db.scalars(consulta))
 
 
 def buscar_por_id(db: Session, id_publico: uuid.UUID, *, travar: bool = False) -> Paciente | None:

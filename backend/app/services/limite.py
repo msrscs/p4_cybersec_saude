@@ -36,6 +36,10 @@ LOGIN = (
 )
 MFA = (Limite("mfa", 15, timedelta(minutes=1)),)
 BUSCA_PACIENTE = (Limite("busca_paciente", 30, timedelta(minutes=1)),)
+LISTA_PACIENTE = (
+    Limite("lista_paciente", 30, timedelta(minutes=1)),
+    Limite("lista_paciente", 300, timedelta(hours=1)),
+)
 GERAL = (Limite("geral", 300, timedelta(minutes=1)),)
 
 

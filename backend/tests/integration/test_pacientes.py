@@ -245,6 +245,8 @@ ESPERADO = {
     "Auditor": (False, False, False, False),
     None: (False, False, False, False),
 }
+# Só acesso global: os demais têm visão restrita pela SPEC, sem recorte por unidade ainda.
+PODEM_LISTAR = {"Administrador", "Gestor"}
 
 
 @pytest.mark.parametrize("perfil", PERFIS)
@@ -265,9 +267,93 @@ def test_permissoes_por_perfil(
     confere(api.delete(url).status_code, inativar, 204)
     confere(api.post(f"{url}/reativar").status_code, inativar, 204)
 
+    listar = perfil in PODEM_LISTAR
+    confere(api.post("/pacientes/lista", json={}).status_code, listar, 200)
+
     permissoes = api.get("/auth/sessao").json()["permissoes"]
     nomes = ("paciente:ler", "paciente:criar", "paciente:editar", "paciente:inativar")
-    assert permissoes == sorted(n for n, ok in zip(nomes, ESPERADO[perfil], strict=True) if ok)
+    esperadas = [n for n, ok in zip(nomes, ESPERADO[perfil], strict=True) if ok]
+    assert permissoes == sorted([*esperadas, *(["paciente:listar"] if listar else [])])
+
+
+# --- Lista de pacientes (ADR-0014) ---------------------------------------------------------
+
+
+def test_lista_so_tem_dados_resumidos_e_cpf_mascarado(admin: TestClient) -> None:
+    dados = _novo(nome="Lúcia Listada")
+    criado = admin.post("/pacientes", json=dados).json()
+    resp = admin.post("/pacientes/lista", json={})
+    assert resp.status_code == 200
+    assert resp.headers["cache-control"] == "no-store"
+    item = resp.json()["itens"][0]  # o mais recente vem primeiro
+    cpf = str(dados["cpf"])
+    assert item == {
+        "id": criado["id"],
+        "cpf_mascarado": f"***.{cpf[4:7]}.{cpf[8:11]}-**",
+        "nome": "Lúcia Listada",
+        "status": "ativo",
+    }
+    assert cpf not in resp.text and cpf.replace(".", "").replace("-", "") not in resp.text
+    assert "1980-05-17" not in resp.text and "exemplo.com.br" not in resp.text
+
+
+def test_lista_percorre_todas_as_paginas_sem_repetir(admin: TestClient) -> None:
+    criados = {admin.post("/pacientes", json=_novo()).json()["id"] for _ in range(25)}
+    vistos: list[str] = []
+    depois = None
+    while True:
+        corpo = admin.post("/pacientes/lista", json={"depois": depois}).json()
+        assert len(corpo["itens"]) <= 20
+        vistos += [i["id"] for i in corpo["itens"]]
+        depois = corpo["proximo"]
+        if depois is None:
+            break
+    assert len(vistos) == len(set(vistos))
+    assert criados <= set(vistos)
+
+
+def test_lista_mostra_inativos(admin: TestClient, paciente: dict[str, object]) -> None:
+    assert admin.delete(f"/pacientes/{paciente['id']}").status_code == 204
+    itens = admin.post("/pacientes/lista", json={}).json()["itens"]
+    assert next(i for i in itens if i["id"] == paciente["id"])["status"] == "inativo"
+
+
+@pytest.mark.parametrize(
+    "corpo",
+    [{"depois": "1 OR 1=1"}, {"depois": 1}, {"limite": 100000}, {"status": "ativo"}, []],
+)
+def test_lista_recusa_entrada_invalida(admin: TestClient, corpo: object) -> None:
+    assert admin.post("/pacientes/lista", json=corpo).status_code == 422
+
+
+def test_lista_com_cursor_desconhecido_nao_devolve_dados(admin: TestClient) -> None:
+    resp = admin.post("/pacientes/lista", json={"depois": str(uuid.uuid4())})
+    assert resp.status_code == 200
+    assert resp.json() == {"itens": [], "proximo": None}
+
+
+def test_lista_exige_token_csrf(admin: TestClient) -> None:
+    del admin.headers["X-CSRF-Token"]
+    assert admin.post("/pacientes/lista", json={}).status_code == 403
+
+
+def test_lista_auditada_sem_dado_pessoal(admin: TestClient, fabrica_sessao: Fabrica) -> None:
+    dados = _novo(nome="Severina Listada")
+    criado = admin.post("/pacientes", json=dados).json()
+    admin.post("/pacientes/lista", json={})
+    with fabrica_sessao() as db:
+        evento = db.scalars(
+            select(Log)
+            .where(Log.acao == "sensitive_data_access", Log.cpf_paciente_hash.is_(None))
+            .order_by(Log.seq_cadeia.desc())
+            .limit(1)
+        ).one()
+    resumo = evento.resumo_acessado
+    assert evento.cpf_usuario_hash is not None
+    assert resumo["recurso"] == "paciente" and resumo["origem"] == "lista"
+    assert criado["id"] in resumo["pacientes"]
+    texto = str(resumo)
+    assert "Severina" not in texto and str(dados["cpf"]) not in texto
 
 
 def test_negado_responde_generico_e_e_auditado(

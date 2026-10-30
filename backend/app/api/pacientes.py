@@ -12,13 +12,16 @@ from fastapi.responses import JSONResponse
 
 from app.api.auth import SEM_CACHE, Config, Ctx, erro
 from app.api.deps import Db, exigir, limitar
-from app.core.cpf import formatar_cpf
+from app.core.cpf import formatar_cpf, mascarar_cpf
 from app.schemas.auth import ErroResposta
 from app.schemas.paciente import (
     PacienteAlteracao,
     PacienteBusca,
     PacienteCadastro,
+    PacienteListaEntrada,
+    PacienteListaResposta,
     PacienteResposta,
+    PacienteResumo,
 )
 from app.services import limite as limite_svc
 from app.services import paciente as paciente_service
@@ -38,6 +41,7 @@ router = APIRouter(
 
 NAO_ENCONTRADO = "Paciente não encontrado."
 Leitor = Annotated[SessaoAtual, Depends(exigir(Permissao.PACIENTE_LER))]
+Listador = Annotated[SessaoAtual, Depends(exigir(Permissao.PACIENTE_LISTAR))]
 Criador = Annotated[SessaoAtual, Depends(exigir(Permissao.PACIENTE_CRIAR))]
 Editor = Annotated[SessaoAtual, Depends(exigir(Permissao.PACIENTE_EDITAR))]
 Inativador = Annotated[SessaoAtual, Depends(exigir(Permissao.PACIENTE_INATIVAR))]
@@ -95,6 +99,37 @@ def buscar(
         return erro(status.HTTP_404_NOT_FOUND, NAO_ENCONTRADO)
     response.headers.update(SEM_CACHE)
     return _resposta(encontrado)
+
+
+@router.post(
+    "/lista",
+    dependencies=[Depends(limitar(limite_svc.LISTA_PACIENTE))],
+    response_model=PacienteListaResposta,
+    responses=ERROS,
+)
+def listar(
+    dados: PacienteListaEntrada,
+    atual: Listador,
+    db: Db,
+    settings: Config,
+    ctx: Ctx,
+    response: Response,
+) -> PacienteListaResposta:
+    """Página da lista, com CPF mascarado. POST como a busca: o repasse não aceita query string."""
+    pagina = paciente_service.listar(db, settings, dados.depois, atual.cpf_hash, ctx)
+    response.headers.update(SEM_CACHE)
+    return PacienteListaResposta(
+        itens=[
+            PacienteResumo(
+                id=item.id_publico,
+                cpf_mascarado=mascarar_cpf(item.cpf),
+                nome=item.nome,
+                status="ativo" if item.status == "ativo" else "inativo",
+            )
+            for item in pagina.itens
+        ],
+        proximo=pagina.proximo,
+    )
 
 
 @router.get(

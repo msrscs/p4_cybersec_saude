@@ -181,6 +181,17 @@ def test_busca_de_pacientes_limitada_contra_varredura(
     assert api.get(f"/pacientes/{uuid.uuid4()}").status_code == 404  # outras rotas seguem
 
 
+def test_lista_de_pacientes_limitada_contra_extracao_em_massa(
+    app_com_limite: FastAPI, fabrica_sessao: Fabrica, settings_integracao: Settings
+) -> None:
+    api = com_csrf(_logado(app_com_limite, fabrica_sessao, settings_integracao))
+    for _ in range(30):
+        assert api.post("/pacientes/lista", json={}).status_code == 200
+    resp = api.post("/pacientes/lista", json={})
+    assert resp.status_code == 429
+    assert "retry-after" in resp.headers
+
+
 def test_janela_fixa() -> None:
     agora = datetime(2026, 10, 29, 12, 34, 56, tzinfo=UTC)
     assert inicio_da_janela(agora, timedelta(minutes=1)) == agora.replace(second=0)

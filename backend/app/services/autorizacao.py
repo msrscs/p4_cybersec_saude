@@ -19,6 +19,7 @@ from app.services.usuario import UsuarioNaoEncontrado
 
 class Permissao(StrEnum):
     PACIENTE_LER = "paciente:ler"
+    PACIENTE_LISTAR = "paciente:listar"
     PACIENTE_CRIAR = "paciente:criar"
     PACIENTE_EDITAR = "paciente:editar"
     PACIENTE_INATIVAR = "paciente:inativar"

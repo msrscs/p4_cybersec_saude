@@ -62,6 +62,12 @@ class PacienteBusca(_Entrada):
     cpf: Cpf = Field(examples=["123.456.789-09"])
 
 
+class PacienteListaEntrada(_Entrada):
+    """`depois` é o cursor devolvido em `proximo`; sem ele, começa do paciente mais recente."""
+
+    depois: uuid.UUID | None = None
+
+
 class PacienteAlteracao(_Entrada):
     """Só os campos enviados são alterados; `email: null` remove o e-mail."""
 
@@ -77,6 +83,18 @@ class PacienteAlteracao(_Entrada):
             if campo in self.model_fields_set and getattr(self, campo) is None:
                 raise ValueError(f"{campo} não pode ser nulo.")
         return self
+
+
+class PacienteResumo(BaseModel):
+    id: uuid.UUID
+    cpf_mascarado: str
+    nome: str
+    status: Literal["ativo", "inativo"]
+
+
+class PacienteListaResposta(BaseModel):
+    itens: list[PacienteResumo]
+    proximo: uuid.UUID | None
 
 
 class PacienteResposta(BaseModel):
