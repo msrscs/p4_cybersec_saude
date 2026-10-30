@@ -1,5 +1,6 @@
 // Tela de usuários (RF-01, ADR-0017). A interface mostra só o que as permissões permitem, mas
 // quem autoriza e aplica as proteções (própria conta, último administrador) é o backend.
+import { opcoesDeUnidade } from './lib/cadastros.js';
 import { cpfValido, formatarCpf, somenteDigitos } from './lib/cpf.js';
 import { definirStatus, el } from './lib/dom.js';
 
@@ -74,7 +75,7 @@ export function criarUsuarios(chamarApi, permissoes) {
     $('usuario-status').dataset.status = usuario.status;
     $('usuario-cpf').textContent = usuario.cpf;
     $('usuario-email').textContent = usuario.email;
-    $('usuario-unidade').textContent = usuario.id_unidade ?? '—';
+    $('usuario-unidade').textContent = usuario.unidade_nome ?? '—';
     $('usuario-mfa').textContent = simOuNao(usuario.mfa_ativo);
     $('usuario-troca').textContent = simOuNao(usuario.troca_senha_obrigatoria);
     $('usuario-bloqueado').textContent = simOuNao(usuario.bloqueado);
@@ -168,7 +169,15 @@ export function criarUsuarios(chamarApi, permissoes) {
 
   // --- Formulário -------------------------------------------------------------------------
 
-  function abrirForm(usuario = null) {
+  async function abrirForm(usuario = null) {
+    // Sem a lista de unidades o formulário não abre: salvar apagaria a unidade da pessoa.
+    let unidades;
+    try {
+      ({ opcoes: unidades } = await chamarApi('GET', '/unidades/opcoes'));
+    } catch (erro) {
+      definirStatus($('status-lista-usuarios'), erro.message, 'error');
+      return;
+    }
     fecharFicha();
     esconderSenha();
     const form = $('form-usuario');
@@ -178,10 +187,15 @@ export function criarUsuarios(chamarApi, permissoes) {
     $('campo-cpf-usuario').hidden = Boolean(usuario); // CPF é imutável
     $('campo-grupos-usuario').hidden = Boolean(usuario) || !pode('grupos');
     $('dica-form-usuario').hidden = Boolean(usuario);
+    $('form-usuario-unidade').replaceChildren(
+      ...opcoesDeUnidade(unidades, usuario?.id_unidade, usuario?.unidade_nome).map(
+        ({ valor, rotulo }) => el('option', { value: valor }, rotulo),
+      ),
+    );
+    $('form-usuario-unidade').value = usuario?.id_unidade ?? '';
     if (usuario) {
       $('form-usuario-nome').value = usuario.nome;
       $('form-usuario-email').value = usuario.email;
-      $('form-usuario-unidade').value = usuario.id_unidade ?? '';
     } else {
       caixasDeGrupo($('form-usuario-grupos'), 'form-grupo');
     }
@@ -203,7 +217,7 @@ export function criarUsuarios(chamarApi, permissoes) {
     const form = evento.currentTarget;
     const status = $('status-form-usuario');
     const id = form.dataset.id;
-    const unidade = $('form-usuario-unidade').value.trim();
+    const unidade = $('form-usuario-unidade').value;
     const dados = {
       nome: $('form-usuario-nome').value.trim(),
       email: $('form-usuario-email').value.trim(),

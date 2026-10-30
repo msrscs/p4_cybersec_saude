@@ -224,6 +224,71 @@ test('auditoria: lista, filtra por evento e por CPF, e mostra detalhes', async (
   await page.getByRole('button', { name: 'Limpar filtros' }).click();
 });
 
+test('cadastros: unidade, serviço e CID, com busca, edição, duplicado e inativação', async () => {
+  await page.getByRole('button', { name: 'Unidades', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Unidades de saúde' })).toBeVisible();
+  await page.getByRole('button', { name: 'Nova unidade' }).click();
+  await page.getByLabel('Nome da unidade').fill('UBS E2E');
+  await page.getByLabel('Tipo da unidade').selectOption('Hospital');
+  await page.getByLabel('Endereço da unidade').fill('Av. Norte, 100');
+  await page.getByLabel('Telefone com DDD (opcional)').fill('(81) 3355-0000');
+  await page.getByRole('button', { name: 'Salvar unidade' }).click();
+  const unidade = page.locator('#secao-unidades tbody tr', { hasText: 'UBS E2E' });
+  await expect(unidade).toContainText('(81) 3355-0000');
+  await expect(unidade).toContainText('Hospital');
+
+  // Nome repetido: mensagem do backend, sem fechar o formulário.
+  await page.getByRole('button', { name: 'Nova unidade' }).click();
+  await page.getByLabel('Nome da unidade').fill('ubs e2e');
+  await page.getByLabel('Endereço da unidade').fill('Rua Sul, 1');
+  await page.getByRole('button', { name: 'Salvar unidade' }).click();
+  await expect(page.locator('#secao-unidades form.ficha .form__status')).toHaveText(
+    'Já existe um cadastro com esses dados.',
+  );
+  await page
+    .locator('#secao-unidades form.ficha')
+    .getByRole('button', { name: 'Cancelar' })
+    .click();
+
+  await page.getByRole('button', { name: 'Serviços', exact: true }).click();
+  await page.getByRole('button', { name: 'Novo serviço' }).click();
+  await page.getByLabel('Nome do serviço').fill('<b>Consulta</b> Ortopedia');
+  await page.getByRole('button', { name: 'Salvar serviço' }).click();
+  const servico = page.locator('#secao-servicos tbody tr', { hasText: 'Consulta' });
+  await expect(servico.locator('td').first()).toHaveText('<b>Consulta</b> Ortopedia');
+  await expect(page.locator('#secao-servicos tbody b')).toHaveCount(0);
+  await servico.getByRole('button', { name: /^Inativar/ }).click();
+  await expect(servico.locator('.selo')).toHaveText('Inativo');
+  await servico.getByRole('button', { name: /^Reativar/ }).click();
+  await expect(servico.locator('.selo')).toHaveText('Ativo');
+
+  await page.getByRole('button', { name: 'CID', exact: true }).click();
+  await page.getByRole('button', { name: 'Novo CID' }).click();
+  await page.getByLabel('Código CID').fill('errado');
+  await page.getByLabel('Descrição do CID').fill('Neoplasia');
+  await page.getByRole('button', { name: 'Salvar CID' }).click();
+  await expect(page.locator('#secao-cids form.ficha .form__status')).toHaveText(
+    'Código CID inválido. Exemplo: C50.9.',
+  );
+  await page.getByLabel('Código CID').fill('c50.9');
+  await page.getByRole('button', { name: 'Salvar CID' }).click();
+  const cid = page.locator('#secao-cids tbody tr', { hasText: 'C50.9' });
+  await expect(cid).toContainText('Neoplasia');
+
+  await cid.getByRole('button', { name: /^Editar/ }).click();
+  await expect(page.getByLabel('Código CID')).toBeDisabled();
+  await page.getByLabel('Descrição do CID').fill('Neoplasia maligna da mama');
+  await page.getByRole('button', { name: 'Salvar CID' }).click();
+  await expect(cid).toContainText('Neoplasia maligna da mama');
+
+  await page.getByLabel('Buscar em CID').fill('nada-disso');
+  await page.locator('#secao-cids').getByRole('button', { name: 'Buscar' }).click();
+  await expect(page.locator('#secao-cids tbody tr')).toHaveCount(0);
+  await page.getByLabel('Buscar em CID').fill('mama');
+  await page.locator('#secao-cids').getByRole('button', { name: 'Buscar' }).click();
+  await expect(cid).toBeVisible();
+});
+
 test('usuários: cadastrar com senha temporária, grupos, inativar, reativar e resetar', async () => {
   const ficha = page.locator('#ficha-usuario');
   const cpf = gerarCpf();
@@ -241,6 +306,7 @@ test('usuários: cadastrar com senha temporária, grupos, inativar, reativar e r
   await page.getByLabel('CPF do novo usuário').fill(cpf);
   await page.getByLabel('Nome do usuário').fill('<b>Rita</b> Navegadora');
   await page.getByLabel('E-mail do usuário').fill(`u${cpf}@recife.pe.gov.br`);
+  await page.getByLabel('Unidade do usuário').selectOption({ label: 'UBS E2E' });
   await page.locator('#form-usuario-grupos').getByLabel('Navegador').check();
   await page.getByRole('button', { name: 'Salvar usuário' }).click();
 
@@ -248,6 +314,7 @@ test('usuários: cadastrar com senha temporária, grupos, inativar, reativar e r
   await expect(senha).toHaveText(/^.{16}$/);
   const temporaria = await senha.textContent();
   await expect(page.locator('#usuario-nome')).toHaveText('<b>Rita</b> Navegadora');
+  await expect(page.locator('#usuario-unidade')).toHaveText('UBS E2E');
   await expect(page.locator('#corpo-usuarios b')).toHaveCount(0);
   await page.getByRole('button', { name: 'Já entreguei a senha' }).click();
   await expect(page.locator('#usuario-senha')).toBeHidden();
@@ -261,6 +328,10 @@ test('usuários: cadastrar com senha temporária, grupos, inativar, reativar e r
   await expect(linha.locator('code')).toHaveText(/^\*\*\*\.\d{3}\.\d{3}-\*\*$/);
 
   await page.getByRole('button', { name: 'Editar usuário' }).click();
+  // A combobox abre na unidade atual da pessoa.
+  await expect(page.getByLabel('Unidade do usuário').locator('option:checked')).toHaveText(
+    'UBS E2E',
+  );
   await page.getByLabel('Nome do usuário').fill('Rita Navegadora');
   await page.getByRole('button', { name: 'Salvar usuário' }).click();
   await expect(page.locator('#status-usuario')).toHaveText('Dados atualizados.');
@@ -279,12 +350,29 @@ test('usuários: cadastrar com senha temporária, grupos, inativar, reativar e r
   await page.getByRole('button', { name: 'Já entreguei a senha' }).click();
   await expect(ficha).toBeVisible();
   await page.getByRole('button', { name: 'Fechar ficha' }).click();
+
+  // Unidade com usuário ativo não pode ser inativada.
+  await page.getByRole('button', { name: 'Unidades', exact: true }).click();
+  const unidade = page.locator('#secao-unidades tbody tr', { hasText: 'UBS E2E' });
+  await unidade.getByRole('button', { name: /^Inativar/ }).click();
+  await expect(page.locator('#secao-unidades > .form__status')).toHaveText(
+    'Há usuários ativos nesta unidade: mova-os antes de inativar.',
+  );
+  await expect(unidade.locator('.selo')).toHaveText('Ativo');
 });
 
 test('no celular a página não tem rolagem lateral, em nenhuma seção', async () => {
   const original = page.viewportSize();
   await page.setViewportSize({ width: 390, height: 800 });
-  for (const secao of ['Usuários', 'Auditoria', 'Pacientes', 'Minha conta']) {
+  for (const secao of [
+    'Usuários',
+    'Unidades',
+    'Serviços',
+    'CID',
+    'Auditoria',
+    'Pacientes',
+    'Minha conta',
+  ]) {
     await page.getByRole('button', { name: secao, exact: true }).click();
     await expect(page.getByRole('button', { name: secao, exact: true })).toHaveAttribute(
       'aria-current',

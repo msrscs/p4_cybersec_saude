@@ -1,6 +1,7 @@
 // Área logada. A interface mostra só o que as permissões da sessão permitem, mas quem
 // autoriza de fato é o backend, a cada requisição (ADR-0011).
 import { criarAuditoria } from './auditoria.js';
+import { CATALOGOS, criarCadastro } from './cadastros.js';
 import { chamar, ErroApi, quandoSessaoExpirar } from './lib/api.js';
 import { cpfValido, formatarCpf, somenteDigitos } from './lib/cpf.js';
 import { definirStatus, el, limpar, mostrarSomente } from './lib/dom.js';
@@ -438,6 +439,14 @@ async function iniciar() {
   $('menu-usuarios').hidden = !temUsuarios;
   if (temUsuarios) {
     aoAbrir['secao-usuarios'] = criarUsuarios(chamarApi, permissoes).abrir;
+  }
+  const temCadastros = permissoes.has('cadastro:ler');
+  for (const id of ['menu-unidades', 'menu-servicos', 'menu-cids']) $(id).hidden = !temCadastros;
+  if (temCadastros) {
+    const podeGerenciar = permissoes.has('cadastro:gerenciar');
+    for (const catalogo of Object.values(CATALOGOS)) {
+      aoAbrir[catalogo.secao] = criarCadastro(chamarApi, catalogo, podeGerenciar).abrir;
+    }
   }
   if (temLogs) aoAbrir['secao-auditoria'] = criarAuditoria(chamarApi).abrir;
   avisoDeCodigos();

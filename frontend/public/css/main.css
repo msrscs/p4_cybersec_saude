@@ -1199,3 +1199,58 @@ input.codigo {
   color: var(--danger);
   background: color-mix(in srgb, var(--danger) 12%, transparent);
 }
+
+/* Cadastros de catálogo */
+.tabela .tabela--cadastro td {
+  white-space: normal;
+}
+
+.tabela .tabela--cadastro td:first-child {
+  width: auto;
+}
+
+.tabela .tabela--cadastro .tabela__acoes {
+  white-space: nowrap;
+}
+
+.tabela__acoes .link + .link {
+  margin-left: 12px;
+}
+
+.tabela--cadastro .selo {
+  white-space: nowrap;
+}
+
+.tabela--cadastro {
+  min-width: 720px;
+}
+
+.tabela .tabela--cadastro td.tabela__sem-quebra {
+  white-space: nowrap;
+}
+
+form.ficha + .tabela {
+  margin-top: 24px;
+}
+
+.painel__cabecalho .button {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* Combobox com a mesma aparência dos campos de texto */
+.field select {
+  width: 100%;
+  height: 46px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface-muted);
+}
+
+.field select:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}

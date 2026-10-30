@@ -38,6 +38,27 @@
           <button
             type="button"
             class="menu__item"
+            data-secao="secao-unidades"
+            id="menu-unidades"
+            hidden
+          >
+            Unidades
+          </button>
+          <button
+            type="button"
+            class="menu__item"
+            data-secao="secao-servicos"
+            id="menu-servicos"
+            hidden
+          >
+            Serviços
+          </button>
+          <button type="button" class="menu__item" data-secao="secao-cids" id="menu-cids" hidden>
+            CID
+          </button>
+          <button
+            type="button"
+            class="menu__item"
             data-secao="secao-auditoria"
             id="menu-auditoria"
             hidden
@@ -393,14 +414,8 @@
                 <input id="form-usuario-email" type="email" maxlength="254" autocomplete="off" />
               </div>
               <div class="field">
-                <label for="form-usuario-unidade">Código da unidade (opcional)</label>
-                <input
-                  id="form-usuario-unidade"
-                  type="number"
-                  min="1"
-                  step="1"
-                  autocomplete="off"
-                />
+                <label for="form-usuario-unidade">Unidade do usuário</label>
+                <select id="form-usuario-unidade"></select>
               </div>
               <fieldset class="grupos" id="campo-grupos-usuario">
                 <legend>Grupos do novo usuário</legend>
@@ -451,6 +466,26 @@
               </button>
             </div>
           </section>
+
+          <!-- Cadastros de catálogo: o conteúdo é montado por cadastros.js -->
+          <section
+            class="painel"
+            id="secao-unidades"
+            hidden
+            aria-labelledby="titulo-secao-unidades"
+          ></section>
+          <section
+            class="painel"
+            id="secao-servicos"
+            hidden
+            aria-labelledby="titulo-secao-servicos"
+          ></section>
+          <section
+            class="painel"
+            id="secao-cids"
+            hidden
+            aria-labelledby="titulo-secao-cids"
+          ></section>
 
           <!-- Auditoria -->
           <section class="painel" id="secao-auditoria" hidden aria-labelledby="titulo-auditoria">

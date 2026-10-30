@@ -3,6 +3,13 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { cabecalhos, MENSAGENS, mensagemDeErro } from '../public/js/lib/api.js';
+import {
+  corpoDoFormulario,
+  erroDoFormulario,
+  formatarTelefone,
+  opcoesDeUnidade,
+  PADRAO_CID,
+} from '../public/js/lib/cadastros.js';
 import { cpfValido, formatarCpf, somenteDigitos } from '../public/js/lib/cpf.js';
 import {
   corpoDaConsulta,
@@ -10,6 +17,53 @@ import {
   periodoValido,
   rotuloDaAcao,
 } from '../public/js/lib/logs.js';
+
+describe('cadastros', () => {
+  const campos = [
+    { nome: 'cid', rotulo: 'Código', soNaCriacao: true, padrao: PADRAO_CID, mensagem: 'inválido' },
+    { nome: 'descricao', rotulo: 'Descrição' },
+    { nome: 'telefone', rotulo: 'Telefone', opcional: true, vazio: null },
+  ];
+
+  it('campo imutável só vai na criação e opcional vazio vira o valor próprio', () => {
+    const valores = { cid: 'C50.9', descricao: ' Mama ', telefone: ' ' };
+    assert.deepEqual(corpoDoFormulario(campos, valores, false), {
+      cid: 'C50.9',
+      descricao: 'Mama',
+      telefone: null,
+    });
+    assert.deepEqual(corpoDoFormulario(campos, valores, true), {
+      descricao: 'Mama',
+      telefone: null,
+    });
+  });
+
+  it('confere preenchimento e formato', () => {
+    assert.equal(erroDoFormulario(campos, { cid: '', descricao: 'x' }, false), 'Preencha: Código.');
+    assert.equal(erroDoFormulario(campos, { cid: 'C5', descricao: 'x' }, false), 'inválido');
+    assert.equal(erroDoFormulario(campos, { cid: 'c50.9', descricao: 'x' }, false), null);
+    assert.equal(erroDoFormulario(campos, { descricao: 'x' }, true), null);
+  });
+
+  it('formata telefone fixo e celular', () => {
+    assert.equal(formatarTelefone('8133550000'), '(81) 3355-0000');
+    assert.equal(formatarTelefone('81999990000'), '(81) 99999-0000');
+    assert.equal(formatarTelefone(null), '—');
+  });
+
+  it('combobox mantém visível a unidade atual, mesmo inativa', () => {
+    const ativas = [{ id: 1, nome: 'UBS Norte' }];
+    assert.deepEqual(opcoesDeUnidade(ativas), [
+      { valor: '', rotulo: 'Sem unidade' },
+      { valor: '1', rotulo: 'UBS Norte' },
+    ]);
+    assert.equal(opcoesDeUnidade(ativas, 1, 'UBS Norte').length, 2);
+    assert.deepEqual(opcoesDeUnidade(ativas, 9, 'UBS Sul').at(-1), {
+      valor: '9',
+      rotulo: 'UBS Sul (inativa)',
+    });
+  });
+});
 
 describe('auditoria', () => {
   it('filtros vazios não vão na consulta', () => {
