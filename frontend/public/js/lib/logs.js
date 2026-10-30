@@ -6,6 +6,7 @@ const ROTULOS = {
   account_locked: 'Conta bloqueada',
   catalog_created: 'Cadastro criado',
   catalog_deactivated: 'Cadastro inativado',
+  catalog_imported: 'Catálogo importado',
   catalog_reactivated: 'Cadastro reativado',
   catalog_updated: 'Cadastro alterado',
   csrf_rejected: 'CSRF recusado',

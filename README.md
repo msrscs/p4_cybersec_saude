@@ -15,6 +15,7 @@ infra/gerar_certificados.sh               # CA interna e certificados TLS em cer
 docker compose up -d db
 cd backend && uv run --env-file ../.env python -m scripts.bootstrap_db   # cria roles e schema
 cd .. && uv run --project backend --env-file .env alembic upgrade head   # aplica migrations
+cd backend && uv run --env-file ../.env python -m scripts.importar_cid && cd ..  # catálogo de CID (ADR-0020)
 cd backend && uv run --env-file ../.env python -m scripts.criar_usuario \
   --cpf 000.000.000-00 --nome "Seu Nome" --email voce@recife.pe.gov.br   # senha pedida sem eco
 ```

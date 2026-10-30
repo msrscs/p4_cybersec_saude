@@ -2,6 +2,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from sqlalchemy import ColumnElement, func, or_, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import InstrumentedAttribute, Session
 
 from app.models import Cid, ServicoSaude, UnidadeSaude, Usuario
@@ -39,6 +40,12 @@ def buscar[R: Registro](
 def inserir(db: Session, registro: Registro) -> None:
     db.add(registro)
     db.flush()
+
+
+def inserir_cids_novos(db: Session, linhas: Sequence[dict[str, Any]]) -> int:
+    """Insere o que ainda não existe, sem alterar o que existe. Devolve quantos entraram."""
+    comando = insert(Cid).values(list(linhas)).on_conflict_do_nothing().returning(Cid.cid_hash)
+    return len(db.execute(comando).all())
 
 
 def unidades_ativas(db: Session, limite: int) -> list[UnidadeSaude]:

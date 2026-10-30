@@ -28,6 +28,7 @@ class Evento(StrEnum):
     PASSWORD_CHANGE = "password_change"  # noqa: S105  # nosec B105
     ACCESS_RESET = "access_reset"
     CATALOG_CREATED = "catalog_created"
+    CATALOG_IMPORTED = "catalog_imported"
     CATALOG_UPDATED = "catalog_updated"
     CATALOG_DEACTIVATED = "catalog_deactivated"
     CATALOG_REACTIVATED = "catalog_reactivated"

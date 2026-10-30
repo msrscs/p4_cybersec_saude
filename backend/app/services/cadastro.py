@@ -22,6 +22,7 @@ from app.services.auditoria import ContextoRequisicao, Evento
 
 TAMANHO_PAGINA = 20
 LIMITE_OPCOES = 1000
+LOTE_IMPORTACAO = 500
 
 
 class CadastroDuplicado(Exception):
@@ -60,6 +61,12 @@ SERVICOS = Catalogo(
     (ServicoSaude.nome, ServicoSaude.descricao),
 )
 CIDS = Catalogo("cid", Cid, Cid.cid, (Cid.cid, Cid.descricao))
+
+
+@dataclass(frozen=True)
+class ResultadoImportacao:
+    criados: int
+    ignorados: int
 
 
 @dataclass(frozen=True)
@@ -118,6 +125,36 @@ def criar_cid(
     _inserir(db, registro)
     _auditar(db, Evento.CATALOG_CREATED, CIDS, codigo, autor, ctx)
     return registro
+
+
+def importar_cids(
+    db: Session, settings: Settings, pares: Sequence[tuple[str, str]], ctx: ContextoRequisicao
+) -> ResultadoImportacao:
+    """Carga do catálogo (ADR-0020): não altera códigos existentes; um evento por importação."""
+    linhas = [
+        {
+            "cid_hash": hash_busca(settings.chave_hmac, FinalidadeHash.CID, codigo),
+            "cid": codigo,
+            "descricao": descricao,
+        }
+        for codigo, descricao in pares
+    ]
+    criados = sum(
+        cadastro_repo.inserir_cids_novos(db, linhas[inicio : inicio + LOTE_IMPORTACAO])
+        for inicio in range(0, len(linhas), LOTE_IMPORTACAO)
+    )
+    resultado = ResultadoImportacao(criados=criados, ignorados=len(linhas) - criados)
+    auditoria.registrar(
+        db,
+        Evento.CATALOG_IMPORTED,
+        ctx,
+        resumo={
+            "recurso": CIDS.recurso,
+            "criados": resultado.criados,
+            "ignorados": resultado.ignorados,
+        },
+    )
+    return resultado
 
 
 def atualizar[R: Registro](
