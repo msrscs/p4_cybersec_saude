@@ -13,6 +13,7 @@ from pydantic import (
 from app.schemas.validadores import Nome, sem_controle
 
 IdTipo = Annotated[int, Field(ge=1, le=2_147_483_647)]
+IdsServicos = Annotated[list[Annotated[int, Field(ge=1, le=2_147_483_647)]], Field(max_length=1000)]
 _CID = re.compile(r"[A-Z][0-9]{2}(\.[0-9A-Z]{1,2})?")
 
 
@@ -93,15 +94,17 @@ class UnidadeNova(_Entrada):
     id_tipo_unidade: IdTipo
     endereco: Endereco
     telefone: Telefone | None = None
+    servicos: IdsServicos = []
 
 
 class UnidadeAlteracao(_Parcial):
-    _obrigatorios = ("nome", "id_tipo_unidade", "endereco")
+    _obrigatorios = ("nome", "id_tipo_unidade", "endereco", "servicos")
 
     nome: Nome | None = None
     id_tipo_unidade: IdTipo | None = None
     endereco: Endereco | None = None
     telefone: Telefone | None = None
+    servicos: IdsServicos | None = None
 
 
 class ServicoNovo(_Entrada):
@@ -129,6 +132,11 @@ class CidAlteracao(_Parcial):
     descricao: DescricaoCid | None = None
 
 
+class Opcao(BaseModel):
+    id: int
+    nome: str
+
+
 class TipoResposta(BaseModel):
     id: int
     nome: str
@@ -144,6 +152,7 @@ class UnidadeResposta(BaseModel):
     endereco: str
     telefone: str | None
     status: str
+    servicos: list[Opcao]
 
 
 class ServicoResposta(BaseModel):
@@ -178,11 +187,6 @@ class ServicosPagina(BaseModel):
 class CidsPagina(BaseModel):
     itens: list[CidResposta]
     tem_mais: bool
-
-
-class Opcao(BaseModel):
-    id: int
-    nome: str
 
 
 class Opcoes(BaseModel):

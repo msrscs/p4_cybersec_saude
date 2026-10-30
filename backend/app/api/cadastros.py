@@ -34,7 +34,13 @@ from app.schemas.cadastro import (
 from app.services import cadastro
 from app.services import limite as limite_svc
 from app.services.autorizacao import Permissao
-from app.services.cadastro import CadastroDuplicado, CadastroEmUso, Catalogo, TipoInvalido
+from app.services.cadastro import (
+    CadastroDuplicado,
+    CadastroEmUso,
+    Catalogo,
+    ServicoInvalido,
+    TipoInvalido,
+)
 from app.services.sessao import SessaoAtual
 
 router = APIRouter(tags=["cadastros"], dependencies=[Depends(limitar(limite_svc.GERAL))])
@@ -74,6 +80,7 @@ def _unidade(registro: UnidadeSaude) -> UnidadeResposta:
         endereco=registro.endereco,
         telefone=registro.telefone,
         status=registro.status,
+        servicos=[Opcao(id=s.id_servico, nome=s.nome) for s in registro.servicos],
     )
 
 
@@ -210,7 +217,7 @@ def criar_unidade(
         return _unidade(cadastro.criar_unidade(db, dados.model_dump(), atual.cpf_hash, ctx))
     except CadastroDuplicado as exc:
         return erro(status.HTTP_409_CONFLICT, str(exc))
-    except TipoInvalido as exc:
+    except (TipoInvalido, ServicoInvalido) as exc:
         return erro(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc))
 
 
@@ -224,7 +231,7 @@ def alterar_unidade(
         )
     except CadastroDuplicado as exc:
         return erro(status.HTTP_409_CONFLICT, str(exc))
-    except TipoInvalido as exc:
+    except (TipoInvalido, ServicoInvalido) as exc:
         return erro(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc))
     if registro is None:
         return erro(status.HTTP_404_NOT_FOUND, NAO_ENCONTRADO)
@@ -254,6 +261,14 @@ def reativar_unidade(id_unidade: IdInteiro, atual: Gestor, db: Db, ctx: Ctx) -> 
 def listar_servicos(dados: ListaEntrada, _atual: Leitor, db: Db) -> ServicosPagina:
     pagina = cadastro.listar(db, cadastro.SERVICOS, dados.busca, dados.pagina)
     return ServicosPagina(itens=[_servico(r) for r in pagina.itens], tem_mais=pagina.tem_mais)
+
+
+@router.get("/servicos/opcoes", response_model=Opcoes, responses=ERROS)
+def opcoes_de_servico(_atual: Leitor, db: Db) -> Opcoes:
+    """Serviços ativos, para escolher os que cada unidade oferece."""
+    return Opcoes(
+        opcoes=[Opcao(id=s.id_servico, nome=s.nome) for s in cadastro.opcoes_de_servico(db)]
+    )
 
 
 @router.post(

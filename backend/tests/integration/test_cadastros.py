@@ -2,6 +2,7 @@
 
 import uuid
 from collections.abc import Iterator
+from typing import Any
 
 import psycopg
 import pytest
@@ -222,6 +223,145 @@ def test_tipo_em_uso_nao_inativa_e_unidade_com_tipo_inativo_continua_editavel(
     assert corpo.json()["tipo_unidade"] == tipo["nome"]
 
 
+# --- Serviços da unidade -----------------------------------------------------------------
+
+
+def _novo_servico(api: TestClient) -> dict[str, Any]:
+    corpo: dict[str, Any] = api.post("/servicos", json=_servico()).json()
+    return corpo
+
+
+def _ids(unidade: dict[str, Any]) -> set[int]:
+    return {s["id"] for s in unidade["servicos"]}
+
+
+def test_unidade_nasce_com_servicos_e_os_mostra_em_ordem(admin: TestClient) -> None:
+    b = admin.post("/servicos", json=_servico(nome=f"Bbb {_sufixo()}")).json()
+    a = admin.post("/servicos", json=_servico(nome=f"Aaa {_sufixo()}")).json()
+    unidade = admin.post("/unidades", json=_unidade(servicos=[b["id"], a["id"], a["id"]])).json()
+    assert unidade["servicos"] == [
+        {"id": a["id"], "nome": a["nome"]},
+        {"id": b["id"], "nome": b["nome"]},
+    ]
+    achada = admin.post("/unidades/lista", json={"busca": unidade["nome"]}).json()["itens"][0]
+    assert achada["servicos"] == unidade["servicos"]
+
+
+def test_unidade_sem_servicos_por_padrao(admin: TestClient) -> None:
+    assert admin.post("/unidades", json=_unidade()).json()["servicos"] == []
+
+
+def test_envio_define_o_conjunto_e_sem_o_campo_nada_muda(
+    admin: TestClient, fabrica_sessao: Fabrica
+) -> None:
+    a, b, c = (_novo_servico(admin) for _ in range(3))
+    unidade = admin.post("/unidades", json=_unidade(servicos=[a["id"], b["id"]])).json()
+    url = f"/unidades/{unidade['id']}"
+
+    corpo = admin.patch(url, json={"servicos": [b["id"], c["id"]]}).json()
+    assert _ids(corpo) == {b["id"], c["id"]}
+    evento = _ultimo(fabrica_sessao, "catalog_updated")
+    assert evento.resumo_acessado["servicos_adicionados"] == [c["id"]]
+    assert evento.resumo_acessado["servicos_removidos"] == [a["id"]]
+
+    corpo = admin.patch(url, json={"endereco": "Rua Sul, 5"}).json()
+    assert _ids(corpo) == {b["id"], c["id"]} and corpo["endereco"] == "Rua Sul, 5"
+
+    assert _ids(admin.patch(url, json={"servicos": []}).json()) == set()
+
+
+def test_mesmos_servicos_nao_geram_evento(admin: TestClient, fabrica_sessao: Fabrica) -> None:
+    servico = _novo_servico(admin)
+    unidade = admin.post("/unidades", json=_unidade(servicos=[servico["id"]])).json()
+    admin.patch(f"/unidades/{unidade['id']}", json={"endereco": "Rua Marca, 1"})
+    antes = _ultimo(fabrica_sessao, "catalog_updated").seq_cadeia
+    resp = admin.patch(f"/unidades/{unidade['id']}", json={"servicos": [servico["id"]]})
+    assert resp.status_code == 200 and _ids(resp.json()) == {servico["id"]}
+    assert _ultimo(fabrica_sessao, "catalog_updated").seq_cadeia == antes
+
+
+def test_criacao_registra_servicos_no_log(admin: TestClient, fabrica_sessao: Fabrica) -> None:
+    servico = _novo_servico(admin)
+    admin.post("/unidades", json=_unidade(servicos=[servico["id"]]))
+    evento = _ultimo(fabrica_sessao, "catalog_created")
+    assert evento.resumo_acessado["servicos_adicionados"] == [servico["id"]]
+
+
+def test_servico_inexistente_ou_inativo_e_recusado_sem_gravar_nada(admin: TestClient) -> None:
+    dados = _unidade(servicos=[2_000_000])
+    resp = admin.post("/unidades", json=dados)
+    assert resp.status_code == 422
+    assert resp.json() == {"detail": "Serviço inválido."}
+    assert admin.post("/unidades/lista", json={"busca": dados["nome"]}).json()["itens"] == []
+
+    inativo = _novo_servico(admin)
+    assert admin.delete(f"/servicos/{inativo['id']}").status_code == 204
+    assert admin.post("/unidades", json=_unidade(servicos=[inativo["id"]])).status_code == 422
+
+    # Na edição, a falha nos serviços desfaz também os demais campos.
+    unidade = admin.post("/unidades", json=_unidade()).json()
+    url = f"/unidades/{unidade['id']}"
+    resp = admin.patch(url, json={"endereco": "Nao Deve Gravar", "servicos": [inativo["id"]]})
+    assert resp.status_code == 422
+    achada = admin.post("/unidades/lista", json={"busca": unidade["nome"]}).json()["itens"][0]
+    assert achada["endereco"] == unidade["endereco"]
+
+
+def test_servico_em_uso_nao_inativa_e_inativo_ja_vinculado_nao_trava_edicao(
+    admin: TestClient,
+) -> None:
+    servico = _novo_servico(admin)
+    unidade = admin.post("/unidades", json=_unidade(servicos=[servico["id"]])).json()
+    url_servico = f"/servicos/{servico['id']}"
+    url = f"/unidades/{unidade['id']}"
+
+    resp = admin.delete(url_servico)
+    assert resp.status_code == 409
+    assert "unidades ativas com este serviço" in resp.json()["detail"]
+
+    assert admin.delete(url).status_code == 204
+    assert admin.delete(url_servico).status_code == 204
+    assert admin.post(f"{url}/reativar").status_code == 204
+    resp = admin.patch(url, json={"endereco": "Rua Nova, 9", "servicos": [servico["id"]]})
+    assert resp.status_code == 200 and _ids(resp.json()) == {servico["id"]}
+    opcoes = admin.get("/servicos/opcoes").json()["opcoes"]
+    assert servico["id"] not in {o["id"] for o in opcoes}
+
+
+def test_busca_de_unidade_acha_pelo_servico(admin: TestClient) -> None:
+    servico = _novo_servico(admin)
+    unidade = admin.post("/unidades", json=_unidade(servicos=[servico["id"]])).json()
+    itens = admin.post("/unidades/lista", json={"busca": servico["nome"]}).json()["itens"]
+    assert [u["id"] for u in itens] == [unidade["id"]]
+
+
+@pytest.mark.parametrize(
+    "servicos", [[0], ["x"], "1", [99_999_999_999], list(range(1, 1002)), None]
+)
+def test_lista_de_servicos_invalida(admin: TestClient, servicos: object) -> None:
+    assert admin.post("/unidades", json=_unidade(servicos=servicos)).status_code == 422
+    unidade = admin.post("/unidades", json=_unidade()).json()
+    resp = admin.patch(f"/unidades/{unidade['id']}", json={"servicos": servicos})
+    assert resp.status_code == 422
+
+
+def test_opcoes_de_servico_seguem_a_leitura(logar: Logar) -> None:  # noqa: F811
+    assert logar("Navegador").api.get("/servicos/opcoes").status_code == 200
+    assert logar("Auditor").api.get("/servicos/opcoes").status_code == 403
+
+
+def test_navegador_nao_altera_servicos_da_unidade(
+    logar: Logar,  # noqa: F811
+    admin: TestClient,
+) -> None:
+    servico = _novo_servico(admin)
+    unidade = admin.post("/unidades", json=_unidade()).json()
+    resp = logar("Navegador").api.patch(
+        f"/unidades/{unidade['id']}", json={"servicos": [servico["id"]]}
+    )
+    assert resp.status_code == 403
+
+
 # --- Duplicados --------------------------------------------------------------------------
 
 
@@ -375,6 +515,14 @@ def test_usuario_nao_aponta_para_unidade_inexistente(
     )
     with fabrica_sessao() as db, db.begin(), pytest.raises((ErroCadastro, IntegrityError)):
         usuario_service.cadastrar(db, settings_integracao, dados, ContextoRequisicao())
+
+
+def test_app_user_inclui_e_remove_vinculos_mas_nao_altera(app_conn: Conn) -> None:
+    with pytest.raises(psycopg.errors.InsufficientPrivilege):
+        app_conn.execute(
+            "UPDATE app.unidade_saude_servico_saude SET fk_servico_saude_id_servico = 1"
+        )
+    app_conn.rollback()
 
 
 # --- Migration: códigos já digitados ------------------------------------------------------

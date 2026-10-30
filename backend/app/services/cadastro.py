@@ -34,6 +34,11 @@ class CadastroEmUso(Exception):
     """A mensagem é exibida ao administrador e diz o que fazer antes de inativar."""
 
 
+class ServicoInvalido(Exception):
+    def __init__(self) -> None:
+        super().__init__("Serviço inválido.")
+
+
 class TipoInvalido(Exception):
     def __init__(self) -> None:
         super().__init__("Tipo de unidade inválido.")
@@ -61,6 +66,7 @@ def _busca_de_unidade(termo: str) -> ColumnElement[bool]:
     return or_(
         _contem(UnidadeSaude.nome, UnidadeSaude.endereco)(termo),
         UnidadeSaude.tipo.has(_contem(TipoUnidade.nome)(termo)),
+        UnidadeSaude.servicos.any(_contem(ServicoSaude.nome)(termo)),
     )
 
 
@@ -107,11 +113,15 @@ def listar[R: Registro](
 
 
 def opcoes_de_unidade(db: Session) -> list[UnidadeSaude]:
-    return cadastro_repo.unidades_ativas(db, LIMITE_OPCOES)
+    return cadastro_repo.ativos(db, UnidadeSaude, LIMITE_OPCOES)
 
 
 def opcoes_de_tipo(db: Session) -> list[TipoUnidade]:
-    return cadastro_repo.tipos_ativos(db, LIMITE_OPCOES)
+    return cadastro_repo.ativos(db, TipoUnidade, LIMITE_OPCOES)
+
+
+def opcoes_de_servico(db: Session) -> list[ServicoSaude]:
+    return cadastro_repo.ativos(db, ServicoSaude, LIMITE_OPCOES)
 
 
 def criar_tipo(
@@ -126,10 +136,23 @@ def criar_tipo(
 def criar_unidade(
     db: Session, valores: dict[str, Any], autor: bytes, ctx: ContextoRequisicao
 ) -> UnidadeSaude:
-    _validar_tipo_ativo(db, valores["id_tipo_unidade"])
-    registro = UnidadeSaude(**valores)
+    campos = dict(valores)
+    servicos = set(campos.pop("servicos", ()))
+    _validar_tipo_ativo(db, campos["id_tipo_unidade"])
+    _validar_servicos_ativos(db, servicos)
+    registro = UnidadeSaude(**campos)
     _inserir(db, registro)
-    _auditar(db, Evento.CATALOG_CREATED, UNIDADES, registro.id_unidade, autor, ctx)
+    cadastro_repo.incluir_servicos(db, registro.id_unidade, servicos)
+    db.refresh(registro)
+    _auditar(
+        db,
+        Evento.CATALOG_CREATED,
+        UNIDADES,
+        registro.id_unidade,
+        autor,
+        ctx,
+        extra={"servicos_adicionados": sorted(servicos)} if servicos else None,
+    )
     return registro
 
 
@@ -194,14 +217,20 @@ def atualizar_unidade(
     autor: bytes,
     ctx: ContextoRequisicao,
 ) -> UnidadeSaude | None:
-    """Só valida o tipo se ele mudou: unidade com tipo inativo continua editável."""
+    """Só valida tipo e serviços novos: o que já está inativo não impede editar o resto."""
     atual = cadastro_repo.buscar(db, UnidadeSaude, chave, travar=True)
     if atual is None:
         return None
-    novo_tipo = alteracoes.get("id_tipo_unidade", atual.id_tipo_unidade)
+    campos = dict(alteracoes)
+    novo_tipo = campos.get("id_tipo_unidade", atual.id_tipo_unidade)
     if novo_tipo != atual.id_tipo_unidade:
         _validar_tipo_ativo(db, novo_tipo)
-    return atualizar(db, UNIDADES, chave, alteracoes, autor, ctx)
+    extra = None
+    if "servicos" in campos:
+        extra = _aplicar_servicos(db, chave, set(campos.pop("servicos")))
+    if not campos and extra is None:
+        return atual  # só serviços, e nada mudou: sem evento
+    return atualizar(db, UNIDADES, chave, campos, autor, ctx, extra=extra)
 
 
 def atualizar[R: Registro](
@@ -211,6 +240,8 @@ def atualizar[R: Registro](
     alteracoes: dict[str, Any],
     autor: bytes,
     ctx: ContextoRequisicao,
+    *,
+    extra: dict[str, Any] | None = None,
 ) -> R | None:
     registro = cadastro_repo.buscar(db, catalogo.modelo, chave, travar=True)
     if registro is None:
@@ -226,6 +257,7 @@ def atualizar[R: Registro](
         autor,
         ctx,
         campos=sorted(alteracoes),
+        extra=extra,
     )
     return registro
 
@@ -278,6 +310,24 @@ def _validar_tipo_ativo(db: Session, id_tipo_unidade: int) -> None:
         raise TipoInvalido
 
 
+def _validar_servicos_ativos(db: Session, ids: set[int]) -> None:
+    if ids and cadastro_repo.servicos_ativos_entre(db, ids) != ids:
+        raise ServicoInvalido
+
+
+def _aplicar_servicos(db: Session, id_unidade: int, desejados: set[int]) -> dict[str, Any] | None:
+    """Deixa a unidade exatamente com esses serviços; devolve o que mudou, para o log."""
+    atuais = cadastro_repo.ids_de_servicos_da_unidade(db, id_unidade)
+    adicionados, removidos = desejados - atuais, atuais - desejados
+    if not adicionados and not removidos:
+        return None
+    _validar_servicos_ativos(db, adicionados)
+    cadastro_repo.incluir_servicos(db, id_unidade, adicionados)
+    if removidos:
+        cadastro_repo.remover_servicos(db, id_unidade, removidos)
+    return {"servicos_adicionados": sorted(adicionados), "servicos_removidos": sorted(removidos)}
+
+
 def _garantir_sem_uso(db: Session, registro: Registro) -> None:
     if (
         isinstance(registro, UnidadeSaude)
@@ -289,6 +339,13 @@ def _garantir_sem_uso(db: Session, registro: Registro) -> None:
         and cadastro_repo.unidades_ativas_do_tipo(db, registro.id_tipo_unidade) > 0
     ):
         raise CadastroEmUso("Há unidades ativas deste tipo: mude o tipo delas antes de inativar.")
+    if (
+        isinstance(registro, ServicoSaude)
+        and cadastro_repo.unidades_ativas_com_servico(db, registro.id_servico) > 0
+    ):
+        raise CadastroEmUso(
+            "Há unidades ativas com este serviço: remova-o delas antes de inativar."
+        )
 
 
 def _inserir(db: Session, registro: Registro) -> None:
@@ -328,8 +385,11 @@ def _auditar[R: Registro](
     ctx: ContextoRequisicao,
     *,
     campos: list[str] | None = None,
+    extra: dict[str, Any] | None = None,
 ) -> None:
     resumo: dict[str, Any] = {"recurso": catalogo.recurso, "id": identificador}
     if campos is not None:
         resumo["campos"] = campos
+    if extra:
+        resumo.update(extra)
     auditoria.registrar(db, evento, ctx, cpf_usuario_hash=autor, resumo=resumo)

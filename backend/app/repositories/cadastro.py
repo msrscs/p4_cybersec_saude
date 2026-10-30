@@ -1,11 +1,11 @@
 from collections.abc import Iterable, Sequence
 from typing import Any
 
-from sqlalchemy import ColumnElement, func, select
+from sqlalchemy import ColumnElement, delete, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import InstrumentedAttribute, Session
 
-from app.models import Cid, ServicoSaude, TipoUnidade, UnidadeSaude, Usuario
+from app.models import Cid, ServicoSaude, TipoUnidade, UnidadeSaude, UnidadeServico, Usuario
 
 type Registro = TipoUnidade | UnidadeSaude | ServicoSaude | Cid
 type Chave = int | bytes
@@ -44,24 +44,64 @@ def inserir_cids_novos(db: Session, linhas: Sequence[dict[str, Any]]) -> int:
     return len(db.execute(comando).all())
 
 
-def unidades_ativas(db: Session, limite: int) -> list[UnidadeSaude]:
+def ativos[R: TipoUnidade | UnidadeSaude | ServicoSaude](
+    db: Session, modelo: type[R], limite: int
+) -> list[R]:
+    """Para as comboboxes: só registros ativos, em ordem de nome."""
     consulta = (
-        select(UnidadeSaude)
-        .where(UnidadeSaude.status == "ativo")
-        .order_by(func.lower(UnidadeSaude.nome))
+        select(modelo)
+        .where(modelo.status == "ativo")
+        .order_by(func.lower(modelo.nome))
         .limit(limite)
     )
     return list(db.scalars(consulta))
 
 
-def tipos_ativos(db: Session, limite: int) -> list[TipoUnidade]:
-    consulta = (
-        select(TipoUnidade)
-        .where(TipoUnidade.status == "ativo")
-        .order_by(func.lower(TipoUnidade.nome))
-        .limit(limite)
+def ids_de_servicos_da_unidade(db: Session, id_unidade: int) -> set[int]:
+    consulta = select(UnidadeServico.fk_servico_saude_id_servico).where(
+        UnidadeServico.fk_unidade_saude_id_unidade == id_unidade
     )
-    return list(db.scalars(consulta))
+    return set(db.scalars(consulta))
+
+
+def incluir_servicos(db: Session, id_unidade: int, ids: Iterable[int]) -> None:
+    linhas = [
+        {"fk_unidade_saude_id_unidade": id_unidade, "fk_servico_saude_id_servico": i} for i in ids
+    ]
+    if linhas:
+        db.execute(insert(UnidadeServico).values(linhas).on_conflict_do_nothing())
+
+
+def remover_servicos(db: Session, id_unidade: int, ids: Iterable[int]) -> None:
+    db.execute(
+        delete(UnidadeServico).where(
+            UnidadeServico.fk_unidade_saude_id_unidade == id_unidade,
+            UnidadeServico.fk_servico_saude_id_servico.in_(list(ids)),
+        )
+    )
+
+
+def servicos_ativos_entre(db: Session, ids: Iterable[int]) -> set[int]:
+    consulta = select(ServicoSaude.id_servico).where(
+        ServicoSaude.id_servico.in_(list(ids)), ServicoSaude.status == "ativo"
+    )
+    return set(db.scalars(consulta))
+
+
+def unidades_ativas_com_servico(db: Session, id_servico: int) -> int:
+    consulta = (
+        select(func.count())
+        .select_from(UnidadeServico)
+        .join(
+            UnidadeSaude,
+            UnidadeSaude.id_unidade == UnidadeServico.fk_unidade_saude_id_unidade,
+        )
+        .where(
+            UnidadeServico.fk_servico_saude_id_servico == id_servico,
+            UnidadeSaude.status == "ativo",
+        )
+    )
+    return int(db.scalar(consulta) or 0)
 
 
 def unidades_ativas_do_tipo(db: Session, id_tipo_unidade: int) -> int:

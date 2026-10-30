@@ -4,7 +4,16 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, FetchedValue, ForeignKey, Identity, MetaData, SmallInteger, Text
+from sqlalchemy import (
+    BigInteger,
+    FetchedValue,
+    ForeignKey,
+    Identity,
+    MetaData,
+    SmallInteger,
+    Text,
+    func,
+)
 from sqlalchemy.dialects.postgresql import BYTEA, INET, JSONB, TIMESTAMP, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -216,24 +225,42 @@ class TipoUnidade(Base):
     status: Mapped[str] = mapped_column(Text, default="ativo")
 
 
-class UnidadeSaude(Base):
-    __tablename__ = "unidade_saude"
-
-    id_unidade: Mapped[int] = mapped_column(Identity(always=True), primary_key=True)
-    id_tipo_unidade: Mapped[int] = mapped_column(ForeignKey(TipoUnidade.id_tipo_unidade))
-    tipo: Mapped[TipoUnidade] = relationship(lazy="selectin")
-    nome: Mapped[str] = mapped_column(Text)
-    endereco: Mapped[str] = mapped_column(Text)
-    telefone: Mapped[str | None] = mapped_column(Text)
-    status: Mapped[str] = mapped_column(Text, default="ativo")
-
-
 class ServicoSaude(Base):
     __tablename__ = "servico_saude"
 
     id_servico: Mapped[int] = mapped_column(Identity(always=True), primary_key=True)
     nome: Mapped[str] = mapped_column(Text)
     descricao: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(Text, default="ativo")
+
+
+class UnidadeServico(Base):
+    __tablename__ = "unidade_saude_servico_saude"
+
+    fk_unidade_saude_id_unidade: Mapped[int] = mapped_column(
+        ForeignKey("app.unidade_saude.id_unidade"), primary_key=True
+    )
+    fk_servico_saude_id_servico: Mapped[int] = mapped_column(
+        ForeignKey(ServicoSaude.id_servico), primary_key=True
+    )
+
+
+class UnidadeSaude(Base):
+    __tablename__ = "unidade_saude"
+
+    id_unidade: Mapped[int] = mapped_column(Identity(always=True), primary_key=True)
+    id_tipo_unidade: Mapped[int] = mapped_column(ForeignKey(TipoUnidade.id_tipo_unidade))
+    tipo: Mapped[TipoUnidade] = relationship(lazy="selectin")
+    # Só leitura: os vínculos mudam pelo repositório, para cada mudança ser auditada.
+    servicos: Mapped[list[ServicoSaude]] = relationship(
+        secondary=UnidadeServico.__table__,
+        viewonly=True,
+        lazy="selectin",
+        order_by=func.lower(ServicoSaude.nome),
+    )
+    nome: Mapped[str] = mapped_column(Text)
+    endereco: Mapped[str] = mapped_column(Text)
+    telefone: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(Text, default="ativo")
 
 
