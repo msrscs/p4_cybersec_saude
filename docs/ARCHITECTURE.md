@@ -9,17 +9,21 @@ Sistema web para [descrever: ex. gestão de prontuários/consultas] com dados de
 
 ```mermaid
 flowchart LR
-    U[Usuário no navegador] -->|HTTPS| F[Frontend Node.js]
-    F -->|HTTPS + cookie de sessão| B[API Python / FastAPI]
-    B -->|SQL parametrizado| D[(PostgreSQL 18)]
+    U[Usuário no navegador] -->|HTTPS| E[Borda Caddy]
+    E -->|HTTPS verificado| F[Frontend Node.js]
+    F -->|HTTPS verificado + cookie de sessão + token CSRF| B[API Python / FastAPI]
+    B -->|SQL parametrizado, TLS verify-full| D[(PostgreSQL 18)]
     B -->|KEK| K[Gerenciador de chaves: .env no dev, secret manager em produção]
+    T[Rotinas periódicas] -->|TLS verify-full| D
     D --- A[(log WORM)]
 ```
 
 | Componente | Tecnologia | Responsabilidade |
 |---|---|---|
-| Frontend | Node.js | Telas, fluxo de login/MFA, headers de segurança (CSP, HSTS, Trusted Types) e repasse restrito `/api` para a API (ADR-0012) |
-| Backend | Python 3.14 + FastAPI | Regras de negócio, autenticação, MFA, criptografia, auditoria |
+| Borda | Caddy | Único ponto exposto: TLS na entrada, redirecionamento de HTTP, timeouts e IP real do cliente (ADR-0013) |
+| Frontend | Node.js | Telas, fluxo de login/MFA, headers de segurança (CSP, HSTS, Trusted Types) e repasse restrito `/api` para a API, com checagem de origem (ADR-0012, ADR-0013) |
+| Backend | Python 3.14 + FastAPI | Regras de negócio, autenticação, MFA, criptografia, auditoria, token CSRF e limite por IP |
+| Tarefas | Python (mesma imagem do backend) | Limpeza de sessões e contadores, verificação periódica da cadeia do log (ADR-0013) |
 | Banco | PostgreSQL 18 (Docker) | Persistência, triggers WORM, permissões por role |
 | Chaves | Variável de ambiente (dev) | Guarda a KEK que cifra as DEKs |
 
@@ -65,7 +69,7 @@ sequenceDiagram
     B->>D: grava evento em log
     B-->>F: sessão completa (cookie __Host-sessao: HttpOnly, Secure, SameSite=Strict)
 ```
-Regras (ADR-0002, 0008, 0009): token temporário só vale para a etapa MFA; sessão expira com 15 min sem uso e 8 h no máximo; rate limit e bloqueio progressivo nas duas etapas; códigos de recuperação de uso único, armazenados com hash.
+Regras (ADR-0002, 0008, 0009): token temporário só vale para a etapa MFA; sessão expira com 15 min sem uso e 8 h no máximo; rate limit e bloqueio progressivo nas duas etapas; códigos de recuperação de uso único, armazenados com hash. Com a sessão completa, toda escrita exige o token CSRF, entregue por `GET /auth/sessao` (ADR-0013).
 
 ## 5. Criptografia de dados sensíveis (envelope encryption)
 
@@ -107,8 +111,9 @@ RBAC com perfis (usuário, profissional, administrador, auditor). Verificação 
 Implementação (ADR-0011): usuário → `usuario_grupo` → `grupo_papel` → `papel_permissao` → permissão (todos ativos), checada pela dependência `exigir(permissao)` em cada rota, sem cache. Perfis iniciais: Administrador, Gestor, Gestor do Cuidado, Navegador e Auditor; atribuição por `scripts.atribuir_grupo` (evento `role_change`). Negativas geram `access_denied`. Pacientes são acessados por UUID opaco (`id_publico`); o CPF só trafega no corpo da busca.
 
 ## 8. Implantação (Docker)
-- Desenvolvimento: `db` no Docker (porta 127.0.0.1:5433), backend e frontend rodando no WSL.
-- Empacotamento (T01/T09): serviços `backend` e `frontend` com Dockerfile (usuário não-root, imagem enxuta), rede interna entre containers e apenas o frontend exposto.
+- Desenvolvimento: `db` no Docker (porta 127.0.0.1:5433, só com TLS), backend e frontend rodando no WSL.
+- Empacotamento (T01/T09, ADR-0013): serviços `edge`, `frontend`, `backend` e `tarefas` com usuário não-root, sistema de arquivos somente leitura e sem capabilities. Redes `borda` e `internal` sem saída para a internet; apenas o `edge` é exposto (`https://cybersec.localhost:8443`).
+- Certificados: CA interna e um certificado por serviço (`infra/gerar_certificados.sh`), em `certs/`, fora do git.
 - Segredos: `.env` fora do git; `.env.example` versionado sem valores.
 
 ## 9. Decisões de arquitetura (ADRs a criar em `/docs/adr`)

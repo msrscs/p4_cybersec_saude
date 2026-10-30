@@ -152,7 +152,7 @@ Cada tarefa deve ser pequena, testável e entregar valor.
 - [x] T06 Auditoria com hash encadeado + verificação
 - [x] T07 Funcionalidade principal (RF-03)
 - [x] T08 Frontend: telas de login/MFA/principal
-- [ ] T09 Hardening (headers, rate limit, CSRF)
+- [x] T09 Hardening (headers, rate limit, CSRF)
 - [ ] T10 Revisão de segurança + relatório final
 
 ## 10. Critérios de pronto

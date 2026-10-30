@@ -11,6 +11,7 @@ Docker, [uv](https://docs.astral.sh/uv/) e Node.js 26.
 ```bash
 cp .env.example .env                      # preencha os valores (POSTGRES_USER != app_user/migrator)
 cd backend && uv run python -m scripts.gerar_chaves && cd ..   # KEK, HMAC_KEY e LOG_CHECKPOINT_KEY no .env (sem exibir)
+infra/gerar_certificados.sh               # CA interna e certificados TLS em certs/ (fora do git)
 docker compose up -d db
 cd backend && uv run --env-file ../.env python -m scripts.bootstrap_db   # cria roles e schema
 cd .. && uv run --project backend --env-file .env alembic upgrade head   # aplica migrations
@@ -41,13 +42,23 @@ Recalcula a cadeia de hashes inteira, grava um checkpoint assinado e imprime a *
 cd frontend && npx playwright install chromium && sudo npx playwright install-deps chromium  # 1x
 cd backend && uv run --env-file ../.env python -m tests.e2e_ambiente
 ```
-Sobe um banco temporário, a API e o frontend em portas próprias, roda o fluxo completo no Chromium (login, MFA, pacientes, logout) e remove tudo no fim (ADR-0012).
+Sobe um banco temporário, a API e o frontend em portas próprias e com TLS (certificados descartáveis), roda o fluxo completo no Chromium (login, MFA, pacientes, logout) e remove tudo no fim (ADR-0012, ADR-0013).
 
 ## Subir o ambiente
 ```bash
 docker compose up --build
 ```
-Frontend em http://127.0.0.1:3000. A API não fica exposta fora da rede interna do Docker.
+Acesso em **https://cybersec.localhost:8443**. Só a borda (Caddy) fica exposta; frontend e API não publicam porta (ADR-0013). O `http://localhost:8080` só redireciona para HTTPS.
+
+**Confiar na CA local (1x, senão o navegador mostra alerta de certificado):** importe `certs/ca.crt` como autoridade raiz do navegador. A CA só pode assinar nomes locais, então não afeta outros sites.
+- **Windows (WSL), Chrome/Edge:** copie com `cp certs/ca.crt /mnt/c/Users/SEU_USUARIO/Downloads/`, abra o arquivo no Windows e use *Instalar certificado → Usuário atual → Autoridades de Certificação Raiz Confiáveis*.
+- **Firefox:** *Configurações → Privacidade e Segurança → Certificados → Ver certificados → Autoridades → Importar*.
+
+Use sempre `cybersec.localhost`, não `localhost`: o HSTS do sistema valeria para todos os seus projetos locais (ADR-0013).
+
+Os certificados de serviço valem 397 dias: renove com `infra/gerar_certificados.sh --renovar`.
+
+As rotinas periódicas rodam no container `tarefas` (limpeza a cada 15 min, verificação do log a cada hora). Acompanhe com `docker logs cybersec_saude-tarefas`.
 
 ## API e Swagger (desenvolvimento)
 ```bash
