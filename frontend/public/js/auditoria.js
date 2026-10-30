@@ -11,6 +11,14 @@ const identificacao = (cpf, hash) => {
   return hash ? el('code', { class: 'log__hash', title: 'Hash do CPF' }, hash) : '—';
 };
 
+// Evento de lista cobre vários pacientes: um aparece direto; vários, em Ver (detalhes).
+function colunaPaciente(item) {
+  const lista = item.pacientes_lista;
+  if (lista.length === 1) return el('code', { class: 'log__cpf' }, lista[0]);
+  if (lista.length > 1) return `${lista.length} pacientes (ver detalhes)`;
+  return identificacao(item.paciente_cpf, item.paciente);
+}
+
 // Duas linhas por registro: os dados e, ao clicar em Ver, os detalhes na largura da tabela.
 function linhas(item) {
   const detalhe = el(
@@ -34,7 +42,7 @@ function linhas(item) {
     el('td', {}, dataHora(item.data_hora)),
     el('td', { title: item.acao }, rotuloDaAcao(item.acao)),
     el('td', {}, identificacao(item.usuario_cpf, item.usuario)),
-    el('td', {}, identificacao(item.paciente_cpf, item.paciente)),
+    el('td', {}, colunaPaciente(item)),
     el('td', {}, item.ip_origem ?? '—'),
     el('td', {}, alternar),
   );

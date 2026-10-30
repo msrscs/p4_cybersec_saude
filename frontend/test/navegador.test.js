@@ -34,6 +34,20 @@ describe('auditoria', () => {
     assert.equal(rotuloDaAcao('evento_novo'), 'evento_novo');
   });
 
+  it('detalhes de evento de lista trazem os pacientes exibidos', () => {
+    const texto = detalhesDoRegistro({
+      seq: 1,
+      hash: 'a',
+      resumo: { origem: 'lista' },
+      pacientes_lista: ['123.456.789-09', 'abc123abc123'],
+    });
+    assert.deepEqual(JSON.parse(texto).pacientes_exibidos, ['123.456.789-09', 'abc123abc123']);
+    assert.equal(
+      'pacientes_exibidos' in JSON.parse(detalhesDoRegistro({ pacientes_lista: [] })),
+      false,
+    );
+  });
+
   it('detalhes juntam metadados e resumo', () => {
     const texto = detalhesDoRegistro({
       seq: 7,

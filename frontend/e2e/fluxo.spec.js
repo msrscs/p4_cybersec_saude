@@ -201,6 +201,17 @@ test('auditoria: lista, filtra por evento e por CPF, e mostra detalhes', async (
   await linhas.first().getByRole('button', { name: 'Ocultar' }).click();
   await expect(detalhe).toBeHidden();
 
+  // Evento de lista: os pacientes exibidos aparecem, embora o evento não tenha um único paciente.
+  await page.getByLabel('Evento').selectOption({ label: 'Acesso a dado sensível' });
+  await page.getByRole('button', { name: 'Filtrar' }).click();
+  const deLista = linhas.filter({ hasText: /\d+ pacientes \(ver detalhes\)/ }).first();
+  await expect(deLista).toBeVisible();
+  await deLista.getByRole('button', { name: 'Ver' }).click();
+  await expect(deLista.locator('xpath=following-sibling::tr[1]').locator('pre')).toContainText(
+    'pacientes_exibidos',
+  );
+  await page.getByRole('button', { name: 'Limpar filtros' }).click();
+
   await page.getByLabel('CPF do usuário').fill('111.111.111-11');
   await page.getByRole('button', { name: 'Filtrar' }).click();
   await expect(page.locator('#status-logs')).toHaveText('Informe um CPF válido.');

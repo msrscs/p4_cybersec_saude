@@ -61,6 +61,7 @@ export function detalhesDoRegistro(item) {
       paciente_hash: item.paciente,
       request_id: item.request_id,
       ...item.resumo,
+      ...(item.pacientes_lista?.length ? { pacientes_exibidos: item.pacientes_lista } : {}),
     },
     null,
     2,
