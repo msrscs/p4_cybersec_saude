@@ -20,6 +20,9 @@ export default defineConfig({
     trace: 'off', // traces guardariam CPF/senha de teste em disco
     screenshot: 'off',
     video: 'off',
+    // Confia só no certificado descartável deste teste (pela chave pública). Nunca usar
+    // ignoreHTTPSErrors: a verificação de TLS segue valendo para todo o resto.
+    launchOptions: { args: [`--ignore-certificate-errors-spki-list=${process.env.E2E_SPKI}`] },
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
 });

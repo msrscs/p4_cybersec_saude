@@ -151,6 +151,18 @@ test('códigos de recuperação: TOTP errado não derruba a sessão', async () =
   await expect(page).toHaveURL(/\/painel$/);
 });
 
+test('HTTPS, cookie de sessão protegido e CSRF: sem token a API recusa', async () => {
+  expect(new URL(page.url()).protocol).toBe('https:');
+  const cookies = await page.context().cookies();
+  const sessao = cookies.find((c) => c.name === '__Host-sessao');
+  expect(sessao).toMatchObject({ secure: true, httpOnly: true, sameSite: 'Strict' });
+  const status = await page.evaluate(async () => {
+    const r = await fetch('/api/auth/logout', { method: 'POST' });
+    return r.status;
+  });
+  expect(status).toBe(403);
+});
+
 test('sair encerra a sessão no servidor', async () => {
   await page.getByRole('button', { name: 'Sair' }).click();
   await expect(page).toHaveURL(/\/\?motivo=saiu$/);
