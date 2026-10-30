@@ -86,7 +86,7 @@ A96,Febre hemorrágica por arenavírus
 A98,Outras febres hemorrágicas por vírus
 A99,Febres hemorrágicas virais não especificadas
 B00,Infecções pelo vírus do herpes [herpes simples]
-B01,Varicela [idapora]
+B01,Varicela [catapora]
 B02,Herpes zoster [Zona]
 B03,Varíola
 B04,Varíola dos macacos [Monkeypox]
@@ -570,16 +570,16 @@ H11,Outros transtornos da conjuntiva
 H13,Transtornos da conjuntiva em doenças classificadas em outra parte
 H15,Transtornos da esclerótica
 H16,Ceratite
-H17,Ciidrizes e opacidades da córnea
+H17,Cicatrizes e opacidades da córnea
 H18,Outros transtornos da córnea
 H19,Transtorno da esclerótica e da córnea em doenças classificadas em outra parte
 H20,Iridociclite
 H21,Outros transtornos da íris e do corpo ciliar
 H22,Transtornos da íris e do corpo ciliar em doenças classificadas em outra parte
-H25,idarata senil
-H26,Outras idaratas
+H25,Catarata senil
+H26,Outras cataratas
 H27,Outros transtornos do cristalino
-H28,idarata e outros transtornos do cristalino em doenças classificadas em outra parte
+H28,Catarata e outros transtornos do cristalino em doenças classificadas em outra parte
 H30,Inflamação coriorretiniana
 H31,Outros transtornos da coróide
 H32,Transtornos coriorretinianos em doenças classificadas em outra parte
@@ -884,8 +884,8 @@ L60,Afecções das unhas
 L62,Afecções das unhas em doenças classificadas em outra parte
 L63,Alopécia areata
 L64,Alopécia androgênica
-L65,Outras formas não ciidriciais da perda de cabelos ou pêlos
-L66,Alopécia ciidricial [perda de cabelos ou pêlos
+L65,Outras formas não cicatriciais da perda de cabelos ou pêlos
+L66,Alopécia cicatricial [perda de cabelos ou pêlos
 L67,Anormalidades da cor e do pedículo dos cabelos e dos pêlos
 L68,Hipertricose
 L70,Acne
@@ -1086,8 +1086,8 @@ O08,Complicações conseqüentes a aborto e gravidez ectópica ou molar
 O10,Hipertensão pré-existente complicando a gravidez
 O11,Distúrbio hipertensivo pré-existente com proteinúria superposta
 O12,Edema e proteinúria gestacionais [induzidos pela gravidez]
-O13,Hipertensão gestacional [induzida pela gravidez] sem proteinúria signifiidiva
-O14,Hipertensão gestacional [induzida pela gravidez] com proteinúria signifiidiva
+O13,Hipertensão gestacional [induzida pela gravidez] sem proteinúria significativa
+O14,Hipertensão gestacional [induzida pela gravidez] com proteinúria significativa
 O15,Eclâmpsia
 O16,Hipertensão materna não especificada
 O20,Hemorragia do início da gravidez
@@ -1532,7 +1532,7 @@ X33,Vítima de raio
 X34,Vítima de terremoto
 X35,Vítima de erupção vulcânica
 X36,Vítima de avalanche
-X37,Vítima de tempestade idaclísmica
+X37,Vítima de tempestade cataclísmica
 X38,Vítima de inundação
 X39,Exposição a outras forças da natureza e às não especificadas
 X40,Envenenamento [intoxicação] acidental por e exposição a analgésicos
