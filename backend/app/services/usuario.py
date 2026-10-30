@@ -12,6 +12,7 @@ from app.core import senha as senha_mod
 from app.core.config import Settings
 from app.core.crypto import (
     DekCifrada,
+    ErroCriptografia,
     FinalidadeHash,
     abrir_dek,
     cifrar_campo,
@@ -108,7 +109,7 @@ def trocar_senha(
             db, ctx, usuario, agora, motivo="senha_atual_invalida", evento=Evento.LOGIN_FAILURE
         )
         raise ErroSenha("Senha atual incorreta.")
-    senha_mod.validar_politica(nova_senha, cpf=_cpf(settings, usuario))
+    senha_mod.validar_politica(nova_senha, cpf=cpf_em_claro(settings, usuario))
     if senha_mod.verificar(nova_senha, usuario.senha_hash):
         raise ErroSenha("A nova senha deve ser diferente da atual.")
 
@@ -162,8 +163,23 @@ def resetar_acesso(
     return temporaria
 
 
-def _cpf(settings: Settings, usuario: Usuario) -> str:
+def cpf_em_claro(settings: Settings, usuario: Usuario) -> str:
     dek = abrir_dek(settings.keyring, DekCifrada(usuario.dek_cripto, usuario.kek_versao))
     return decifrar_campo(
         dek, usuario.cpf_cripto, tabela="usuario", coluna="cpf_cripto", id_registro=usuario.cpf_hash
     )
+
+
+def nome_ou_nada(settings: Settings, usuario: Usuario) -> str | None:
+    """Nome para o cabeçalho da tela: um cadastro adulterado não pode derrubar a sessão."""
+    try:
+        dek = abrir_dek(settings.keyring, DekCifrada(usuario.dek_cripto, usuario.kek_versao))
+        return decifrar_campo(
+            dek,
+            usuario.nome_cripto,
+            tabela="usuario",
+            coluna="nome_cripto",
+            id_registro=usuario.cpf_hash,
+        )
+    except ErroCriptografia:
+        return None

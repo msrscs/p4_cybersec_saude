@@ -269,6 +269,16 @@ def _cifrar_opcional(dek: bytes, cpf_hash: bytes, coluna: str, valor: str | None
     return None if valor is None else _cifrar(dek, cpf_hash, coluna, valor)
 
 
+def cpf_em_claro(settings: Settings, paciente: Paciente) -> str:
+    return decifrar_campo(
+        _dek(settings, paciente),
+        paciente.cpf_cripto,
+        tabela=_TABELA,
+        coluna="cpf_cripto",
+        id_registro=paciente.cpf_hash,
+    )
+
+
 def _resumir(settings: Settings, paciente: Paciente) -> ResumoPaciente:
     dek = _dek(settings, paciente)
     chave = paciente.cpf_hash

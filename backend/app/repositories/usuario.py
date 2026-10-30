@@ -1,3 +1,5 @@
+from collections.abc import Iterable
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -25,3 +27,7 @@ def inserir(db: Session, usuario: Usuario) -> None:
 
 def buscar(db: Session, cpf_hash: bytes) -> Usuario | None:
     return db.get(Usuario, cpf_hash)
+
+
+def buscar_varios(db: Session, cpf_hashes: Iterable[bytes]) -> list[Usuario]:
+    return list(db.scalars(select(Usuario).where(Usuario.cpf_hash.in_(list(cpf_hashes)))))

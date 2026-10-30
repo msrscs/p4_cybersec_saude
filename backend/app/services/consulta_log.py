@@ -1,10 +1,13 @@
 """Consulta do log de auditoria (RF-04, ADR-0015): somente leitura, e a leitura é auditada.
 
-Hashes saem truncados: bastam para correlacionar eventos na tela e reduzem o que fica exposto,
-mas não anonimizam. A integridade exibida é a da última verificação feita pelo container
-`tarefas`; a API não recalcula a cadeia nem recebe a chave dos checkpoints (ADR-0010).
+O log guarda só hashes. O CPF exibido vem dos cadastros de usuário e paciente, decifrado na hora
+de responder (ADR-0016), e nunca é gravado no log. Hash sem cadastro (ex.: login com CPF que não
+existe) continua aparecendo como hash truncado. A integridade exibida é a da última verificação
+feita pelo container `tarefas`; a API não recalcula a cadeia nem recebe a chave dos checkpoints
+(ADR-0010).
 """
 
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
@@ -12,10 +15,13 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
-from app.core.crypto import FinalidadeHash, hash_busca
+from app.core.cpf import formatar_cpf
+from app.core.crypto import ErroCriptografia, FinalidadeHash, hash_busca
 from app.models import Log
 from app.repositories import log as log_repo
-from app.services import auditoria
+from app.repositories import paciente as paciente_repo
+from app.repositories import usuario as usuario_repo
+from app.services import auditoria, paciente, usuario
 from app.services.auditoria import ContextoRequisicao, Evento
 
 TAMANHO_PAGINA = 50  # fixo: o cliente não escolhe quantos registros ler por requisição
@@ -40,6 +46,8 @@ class ItemLog:
     request_id: str | None
     usuario: str | None
     paciente: str | None
+    usuario_cpf: str | None = field(repr=False)
+    paciente_cpf: str | None = field(repr=False)
     hash: str
     resumo: dict[str, Any]
 
@@ -81,15 +89,13 @@ def consultar(
         cpf_usuario_hash=cpf_hash,
     )
     pagina = linhas[:TAMANHO_PAGINA]
-    auditoria.registrar(
-        db,
-        Evento.LOG_READ,
-        ctx,
-        cpf_usuario_hash=autor,
-        resumo=_resumo_da_leitura(filtros, cpf_hash, len(pagina)),
-    )
+    cpfs_usuarios = _cpfs_de_usuarios(db, settings, pagina)
+    cpfs_pacientes = _cpfs_de_pacientes(db, settings, pagina)
+    resumo = _resumo_da_leitura(filtros, cpf_hash, pagina)
+    resumo["cpfs_exibidos"] = len(cpfs_usuarios) + len(cpfs_pacientes)
+    auditoria.registrar(db, Evento.LOG_READ, ctx, cpf_usuario_hash=autor, resumo=resumo)
     return PaginaLog(
-        itens=[_item(linha) for linha in pagina],
+        itens=[_item(linha, cpfs_usuarios, cpfs_pacientes) for linha in pagina],
         proximo=pagina[-1].seq_cadeia if len(linhas) > TAMANHO_PAGINA else None,
     )
 
@@ -108,9 +114,40 @@ def integridade(db: Session) -> Integridade:
     )
 
 
-def _resumo_da_leitura(filtros: Filtros, cpf_hash: bytes | None, registros: int) -> dict[str, Any]:
-    # Quem consultou quem fica registrado pelo hash truncado, nunca pelo CPF.
-    resumo: dict[str, Any] = {"registros": registros}
+def _cpfs_de_usuarios(db: Session, settings: Settings, pagina: list[Log]) -> dict[bytes, str]:
+    hashes = {linha.cpf_usuario_hash for linha in pagina if linha.cpf_usuario_hash}
+    registros = usuario_repo.buscar_varios(db, hashes) if hashes else []
+    return _decifrar_cpfs(registros, lambda r: (r.cpf_hash, usuario.cpf_em_claro(settings, r)))
+
+
+def _cpfs_de_pacientes(db: Session, settings: Settings, pagina: list[Log]) -> dict[bytes, str]:
+    hashes = {linha.cpf_paciente_hash for linha in pagina if linha.cpf_paciente_hash}
+    registros = paciente_repo.buscar_varios(db, hashes) if hashes else []
+    return _decifrar_cpfs(registros, lambda r: (r.cpf_hash, paciente.cpf_em_claro(settings, r)))
+
+
+def _decifrar_cpfs[T](
+    registros: Iterable[T], decifrar: Callable[[T], tuple[bytes, str]]
+) -> dict[bytes, str]:
+    # Um cadastro adulterado não pode derrubar a tela de auditoria: a linha fica só com o hash.
+    cpfs: dict[bytes, str] = {}
+    for registro in registros:
+        try:
+            chave, cpf = decifrar(registro)
+        except ErroCriptografia:
+            continue
+        cpfs[chave] = formatar_cpf(cpf)
+    return cpfs
+
+
+def _resumo_da_leitura(
+    filtros: Filtros, cpf_hash: bytes | None, pagina: list[Log]
+) -> dict[str, Any]:
+    # Filtros e faixa da cadeia permitem saber o que foi visto; o CPF nunca vai para o log.
+    resumo: dict[str, Any] = {"registros": len(pagina)}
+    if pagina:
+        resumo["seq_inicio"] = pagina[0].seq_cadeia
+        resumo["seq_fim"] = pagina[-1].seq_cadeia
     if filtros.de is not None:
         resumo["de"] = filtros.de.isoformat()
     if filtros.ate is not None:
@@ -124,7 +161,7 @@ def _resumo_da_leitura(filtros: Filtros, cpf_hash: bytes | None, registros: int)
     return resumo
 
 
-def _item(linha: Log) -> ItemLog:
+def _item(linha: Log, usuarios: dict[bytes, str], pacientes: dict[bytes, str]) -> ItemLog:
     return ItemLog(
         seq=linha.seq_cadeia,
         data_hora=linha.data_hora,
@@ -133,6 +170,8 @@ def _item(linha: Log) -> ItemLog:
         request_id=None if linha.request_id is None else str(linha.request_id),
         usuario=_curto(linha.cpf_usuario_hash),
         paciente=_curto(linha.cpf_paciente_hash),
+        usuario_cpf=usuarios.get(linha.cpf_usuario_hash or b""),
+        paciente_cpf=pacientes.get(linha.cpf_paciente_hash or b""),
         hash=linha.hash_assinatura_worm.hex()[:_TAMANHO_HASH],
         resumo=linha.resumo_acessado,
     )

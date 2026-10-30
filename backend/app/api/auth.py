@@ -64,6 +64,7 @@ def sessao(atual: Sessao, db: Db, settings: Config, response: Response) -> Sessa
     return SessaoResposta(
         expira_em=atual.expira_em,
         csrf_token=token_csrf(settings.chave_hmac, atual.token_hash),
+        nome=usuario_service.nome_ou_nada(settings, usuario) if usuario else None,
         troca_senha_obrigatoria=bool(usuario and usuario.troca_senha_obrigatoria),
         permissoes=sorted(autorizacao.permissoes(db, atual.cpf_hash)),
     )

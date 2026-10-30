@@ -1,4 +1,5 @@
 import uuid
+from collections.abc import Iterable
 
 from sqlalchemy import literal, select, tuple_
 from sqlalchemy.orm import Session
@@ -20,6 +21,10 @@ def inserir(db: Session, paciente: Paciente) -> None:
 
 def buscar_por_cpf_hash(db: Session, cpf_hash: bytes) -> Paciente | None:
     return db.get(Paciente, cpf_hash)
+
+
+def buscar_varios(db: Session, cpf_hashes: Iterable[bytes]) -> list[Paciente]:
+    return list(db.scalars(select(Paciente).where(Paciente.cpf_hash.in_(list(cpf_hashes)))))
 
 
 def listar(db: Session, *, limite: int, depois: Paciente | None = None) -> list[Paciente]:

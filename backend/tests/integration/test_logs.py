@@ -10,11 +10,12 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import Settings
 from app.core.cpf import formatar_cpf
-from app.core.crypto import FinalidadeHash, hash_busca
+from app.core.crypto import ErroCriptografia, FinalidadeHash, hash_busca
 from app.models import Log
 from app.services import auditoria
 from app.services.auditoria import ContextoRequisicao, Evento
 
+from .conftest import gerar_cpf
 from .test_pacientes import Logar, _novo, logar  # noqa: F401
 
 Fabrica = sessionmaker[Session]
@@ -66,7 +67,7 @@ def test_nao_ha_rota_que_altere_o_log(logar: Logar) -> None:  # noqa: F811
         assert getattr(api, metodo)("/logs/consulta").status_code == 405
 
 
-def test_item_tem_hash_truncado_e_nenhum_dado_pessoal(
+def test_item_mostra_cpfs_decifrados_e_nenhum_outro_dado_pessoal(
     logar: Logar,  # noqa: F811
     settings_integracao: Settings,
 ) -> None:
@@ -74,14 +75,79 @@ def test_item_tem_hash_truncado_e_nenhum_dado_pessoal(
     dados = _novo(nome="Severina Consultada")
     logado.api.post("/pacientes", json=dados)
     resp = logado.api.post("/logs/consulta", json={"acao": "patient_created"})
+    assert resp.headers["cache-control"] == "no-store"
     item = resp.json()["itens"][0]
     assert item["acao"] == "patient_created"
+    assert item["usuario_cpf"] == formatar_cpf(logado.cpf)
+    assert item["paciente_cpf"] == dados["cpf"]
     assert len(item["usuario"]) == len(item["paciente"]) == len(item["hash"]) == 12
     completo = hash_busca(settings_integracao.chave_hmac, FinalidadeHash.CPF, logado.cpf).hex()
     assert item["usuario"] == completo[:12]
     assert completo not in resp.text
-    assert "Severina" not in resp.text
-    assert str(dados["cpf"]) not in resp.text and logado.cpf not in resp.text
+    assert "Severina" not in resp.text and "exemplo.com.br" not in resp.text
+
+
+def test_cpf_sem_cadastro_continua_como_hash(
+    logar: Logar,  # noqa: F811
+    fabrica_sessao: Fabrica,
+    settings_integracao: Settings,
+) -> None:
+    desconhecido = hash_busca(settings_integracao.chave_hmac, FinalidadeHash.CPF, gerar_cpf())
+    with fabrica_sessao() as db, db.begin():
+        auditoria.registrar(
+            db, Evento.LOGIN_FAILURE, ContextoRequisicao(), cpf_usuario_hash=desconhecido
+        )
+    item = _consulta(logar("Auditor").api, acao="login_failure")["itens"][0]  # type: ignore[index]
+    assert item["usuario_cpf"] is None
+    assert item["usuario"] == desconhecido.hex()[:12]
+
+
+def test_cadastro_adulterado_nao_derruba_a_auditoria(
+    logar: Logar,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    logado = logar("Auditor")
+
+    def falha(*_a: object) -> str:
+        raise ErroCriptografia("Falha ao decifrar dado.")
+
+    monkeypatch.setattr("app.services.usuario.cpf_em_claro", falha)
+    item = _consulta(logado.api, cpf=formatar_cpf(logado.cpf))["itens"][0]  # type: ignore[index]
+    assert item["usuario_cpf"] is None and len(item["usuario"]) == 12
+
+
+def test_cpf_exibido_nao_e_gravado_no_log(
+    logar: Logar,  # noqa: F811
+    fabrica_sessao: Fabrica,
+) -> None:
+    logado = logar("Auditor")
+    _consulta(logado.api)
+    with fabrica_sessao() as db:
+        evento = db.scalars(
+            select(Log).where(Log.acao == "log_read").order_by(Log.seq_cadeia.desc()).limit(1)
+        ).one()
+    assert evento.resumo_acessado["cpfs_exibidos"] >= 1
+    assert evento.resumo_acessado["seq_inicio"] >= evento.resumo_acessado["seq_fim"]
+    texto = str(evento.resumo_acessado)
+    assert logado.cpf not in texto and formatar_cpf(logado.cpf) not in texto
+
+
+def test_sessao_devolve_o_nome_do_usuario_logado(logar: Logar) -> None:  # noqa: F811
+    assert logar("Navegador").api.get("/auth/sessao").json()["nome"] == "Ana"
+
+
+def test_nome_adulterado_nao_derruba_a_sessao(
+    logar: Logar,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    logado = logar("Navegador")
+
+    def falha(*_a: object, **_k: object) -> str:
+        raise ErroCriptografia("Falha ao decifrar dado.")
+
+    monkeypatch.setattr("app.services.usuario.decifrar_campo", falha)
+    resp = logado.api.get("/auth/sessao")
+    assert resp.status_code == 200 and resp.json()["nome"] is None
 
 
 def test_filtros_por_acao_usuario_e_periodo(logar: Logar) -> None:  # noqa: F811
@@ -158,12 +224,11 @@ def test_leitura_e_auditada_sem_cpf_em_claro(
         ).one()
     chave = settings_integracao.chave_hmac
     assert evento.cpf_usuario_hash == hash_busca(chave, FinalidadeHash.CPF, auditor.cpf)
-    assert evento.resumo_acessado == {
-        "registros": 1,
-        "acao": "login_success",
-        "usuario": hash_busca(chave, FinalidadeHash.CPF, alvo.cpf).hex()[:12],
-    }
-    assert alvo.cpf not in str(evento.resumo_acessado)
+    resumo = evento.resumo_acessado
+    assert resumo["registros"] == 1 and resumo["acao"] == "login_success"
+    assert resumo["usuario"] == hash_busca(chave, FinalidadeHash.CPF, alvo.cpf).hex()[:12]
+    assert resumo["cpfs_exibidos"] == 1
+    assert alvo.cpf not in str(resumo) and formatar_cpf(alvo.cpf) not in str(resumo)
 
 
 def test_cada_pagina_lida_gera_um_evento(logar: Logar, fabrica_sessao: Fabrica) -> None:  # noqa: F811
