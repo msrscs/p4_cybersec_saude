@@ -19,29 +19,23 @@ jobs:
     defaults:
       run:
         working-directory: backend
-    services:
-      postgres:
-        image: postgres:18
-        env:
-          POSTGRES_USER: cs_admin
-          # Banco efêmero do CI, destruído ao fim do job; não é segredo de nenhum ambiente.
-          POSTGRES_PASSWORD: ci-efemero
-          POSTGRES_DB: postgres
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd "pg_isready -U cs_admin" --health-interval 5s
-          --health-timeout 5s --health-retries 10
     env:
       POSTGRES_USER: cs_admin
+      # Banco efêmero do CI, destruído ao fim do job; não é segredo de nenhum ambiente.
       POSTGRES_PASSWORD: ci-efemero
       POSTGRES_DB: postgres
       DB_HOST: localhost
       DB_PORT: "5432"
+      DB_SSLMODE: verify-full
+      DB_SSLROOTCERT: ${{ github.workspace }}/certs/ca.crt
       REQUIRE_DB_TESTS: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Certificados descartáveis e Postgres com TLS obrigatório
+        working-directory: .
+        run: infra/gerar_certificados.sh && infra/postgres/subir_ci.sh
       - name: Gera senhas aleatórias das roles para esta execução
         run: |
           echo "::add-mask::$(openssl rand -hex 24 | tee /tmp/app_pw)"
@@ -78,6 +72,10 @@ jobs:
         run: >-
           uv run coverage report --fail-under=90
           --include="app/services/autorizacao.py,app/services/paciente.py,app/repositories/rbac.py,app/repositories/paciente.py,app/api/pacientes.py,app/schemas/paciente.py,app/api/deps.py"
+      - name: Cobertura mínima nos módulos críticos (hardening)
+        run: >-
+          uv run coverage report --fail-under=90
+          --include="app/services/limite.py,app/repositories/limite.py,app/services/manutencao.py,app/core/headers.py,app/core/db_url.py"
       - run: uv run pip-audit
 
   frontend:
@@ -104,27 +102,20 @@ jobs:
     name: Ponta a ponta (Playwright + API + Postgres)
     runs-on: ubuntu-latest
     needs: [backend, frontend]
-    services:
-      postgres:
-        image: postgres:18
-        env:
-          POSTGRES_USER: cs_admin
-          POSTGRES_PASSWORD: ci-efemero
-          POSTGRES_DB: postgres
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd "pg_isready -U cs_admin" --health-interval 5s
-          --health-timeout 5s --health-retries 10
     env:
       POSTGRES_USER: cs_admin
       POSTGRES_PASSWORD: ci-efemero
       POSTGRES_DB: postgres
       DB_HOST: localhost
       DB_PORT: "5432"
+      DB_SSLMODE: verify-full
+      DB_SSLROOTCERT: ${{ github.workspace }}/certs/ca.crt
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Certificados descartáveis e Postgres com TLS obrigatório
+        run: infra/gerar_certificados.sh && infra/postgres/subir_ci.sh
       - name: Gera senhas e chaves aleatórias para esta execução
         run: |
           for nome in APP_DB_PASSWORD MIGRATOR_DB_PASSWORD; do
@@ -175,3 +166,4 @@ jobs:
           persist-credentials: false
       - run: docker build -t cybersec-saude-backend:ci backend
       - run: docker build -t cybersec-saude-frontend:ci frontend
+      - run: docker build -t cybersec-saude-edge:ci infra/caddy
