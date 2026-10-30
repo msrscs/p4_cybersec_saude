@@ -39,7 +39,9 @@ class Settings(BaseSettings):
     def _validar_chaves(self) -> Self:
         # Falha na inicialização se alguma chave for inválida; mensagens sem material de chave.
         _ = self.keyring
-        if self.chave_checkpoint is not None and self.chave_checkpoint == self.chave_hmac:
+        # Fora do `if`: a API não recebe LOG_CHECKPOINT_KEY e ainda assim precisa falhar aqui.
+        chave_hmac = self.chave_hmac
+        if self.chave_checkpoint is not None and self.chave_checkpoint == chave_hmac:
             raise ValueError("LOG_CHECKPOINT_KEY deve ser diferente de HMAC_KEY.")
         return self
 

@@ -73,6 +73,16 @@ def test_configuracao_de_chave_invalida_falha_sem_vazar(
     assert "senha-ficticia-de-teste" not in str(exc.value)
 
 
+def test_hmac_invalida_falha_mesmo_sem_chave_de_checkpoint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # É o caso do container da API, que não recebe LOG_CHECKPOINT_KEY (ADR-0010).
+    monkeypatch.delenv("LOG_CHECKPOINT_KEY", raising=False)
+    monkeypatch.setenv("HMAC_KEY", "YWJj")
+    with pytest.raises(ValidationError):
+        Settings()
+
+
 def test_chave_de_checkpoint_opcional_e_validada(monkeypatch: pytest.MonkeyPatch) -> None:
     import os
 
