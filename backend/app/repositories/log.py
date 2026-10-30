@@ -1,7 +1,8 @@
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
+from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Text, cast, select
+from sqlalchemy import Text, cast, func, select
 from sqlalchemy.orm import Session
 
 from app.core.cadeia import RegistroCadeia
@@ -54,6 +55,45 @@ def iterar_cadeia(db: Session, lote: int = 1000) -> Iterator[RegistroCadeia]:
     )
     for linha in db.execute(consulta):
         yield RegistroCadeia(**linha._asdict())
+
+
+def consultar(
+    db: Session,
+    *,
+    limite: int,
+    antes: int | None = None,
+    de: datetime | None = None,
+    ate: datetime | None = None,
+    acao: str | None = None,
+    cpf_usuario_hash: bytes | None = None,
+) -> list[Log]:
+    """Mais recentes primeiro, por cursor (seq_cadeia); só os filtros informados se aplicam."""
+    consulta = select(Log).order_by(Log.seq_cadeia.desc()).limit(limite)
+    if antes is not None:
+        consulta = consulta.where(Log.seq_cadeia < antes)
+    if de is not None:
+        consulta = consulta.where(Log.data_hora >= de)
+    if ate is not None:
+        consulta = consulta.where(Log.data_hora <= ate)
+    if acao is not None:
+        consulta = consulta.where(Log.acao == acao)
+    if cpf_usuario_hash is not None:
+        consulta = consulta.where(Log.cpf_usuario_hash == cpf_usuario_hash)
+    return list(db.scalars(consulta))
+
+
+def ultimo_evento(db: Session, acoes: Iterable[str]) -> Log | None:
+    consulta = select(Log).where(Log.acao.in_(list(acoes)))
+    return db.scalars(consulta.order_by(Log.seq_cadeia.desc()).limit(1)).one_or_none()
+
+
+def ultimo_checkpoint(db: Session) -> LogCheckpoint | None:
+    consulta = select(LogCheckpoint).order_by(LogCheckpoint.seq_cadeia.desc()).limit(1)
+    return db.scalars(consulta).one_or_none()
+
+
+def total_registros(db: Session) -> int:
+    return int(db.scalar(select(func.coalesce(func.max(Log.seq_cadeia), 0))) or 0)
 
 
 def checkpoints(db: Session) -> list[LogCheckpoint]:

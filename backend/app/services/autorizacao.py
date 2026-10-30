@@ -23,6 +23,7 @@ class Permissao(StrEnum):
     PACIENTE_CRIAR = "paciente:criar"
     PACIENTE_EDITAR = "paciente:editar"
     PACIENTE_INATIVAR = "paciente:inativar"
+    LOG_LER = "log:ler"
 
 
 class GrupoNaoEncontrado(Exception):

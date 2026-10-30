@@ -40,6 +40,7 @@ LISTA_PACIENTE = (
     Limite("lista_paciente", 30, timedelta(minutes=1)),
     Limite("lista_paciente", 300, timedelta(hours=1)),
 )
+CONSULTA_LOG = (Limite("consulta_log", 60, timedelta(minutes=1)),)
 GERAL = (Limite("geral", 300, timedelta(minutes=1)),)
 
 

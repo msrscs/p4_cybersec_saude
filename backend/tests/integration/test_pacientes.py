@@ -273,7 +273,9 @@ def test_permissoes_por_perfil(
     permissoes = api.get("/auth/sessao").json()["permissoes"]
     nomes = ("paciente:ler", "paciente:criar", "paciente:editar", "paciente:inativar")
     esperadas = [n for n, ok in zip(nomes, ESPERADO[perfil], strict=True) if ok]
-    assert permissoes == sorted([*esperadas, *(["paciente:listar"] if listar else [])])
+    extras = ["paciente:listar"] if listar else []
+    extras += ["log:ler"] if perfil in ("Administrador", "Auditor") else []
+    assert permissoes == sorted([*esperadas, *extras])
 
 
 # --- Lista de pacientes (ADR-0014) ---------------------------------------------------------

@@ -27,6 +27,7 @@ class Evento(StrEnum):
     LOG_CHAIN_VERIFIED = "log_chain_verified"
     LOG_CHAIN_BROKEN = "log_chain_broken"
     LOG_CHECKPOINT_CREATED = "log_checkpoint_created"
+    LOG_READ = "log_read"
     ACCESS_DENIED = "access_denied"
     ROLE_CHANGE = "role_change"
     SENSITIVE_DATA_ACCESS = "sensitive_data_access"
