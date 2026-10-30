@@ -79,7 +79,8 @@ CID de doenças.
 
 **RF-10 Cadastro Unidade de Saúde**
 Unidade de Sáude (Posto de Sáude, Clínica, Hospital, Laboratório).
-- [x] Tabela: [unidade_saude] Campos: [id_unidade, tipo_unidade, nome, endereco, telefone]
+- [x] Tabela: [tipo_unidade] Campos: [id_tipo_unidade, nome, descricao, status], com CRUD (ADR-0021)
+- [x] Tabela: [unidade_saude] Campos: [id_unidade, id_tipo_unidade, nome, endereco, telefone]
 - [x] CRUD (exclusão lógica — ADR-0019)
 
 **RF-11 Cadastro Serviços de Saúde**
