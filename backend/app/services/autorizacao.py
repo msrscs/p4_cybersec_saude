@@ -24,6 +24,8 @@ class Permissao(StrEnum):
     PACIENTE_CRIAR = "paciente:criar"
     PACIENTE_EDITAR = "paciente:editar"
     PACIENTE_INATIVAR = "paciente:inativar"
+    CADASTRO_LER = "cadastro:ler"
+    CADASTRO_GERENCIAR = "cadastro:gerenciar"
     LOG_LER = "log:ler"
     LOG_VER_CPF = "log:ver_cpf"
     USUARIO_LER = "usuario:ler"

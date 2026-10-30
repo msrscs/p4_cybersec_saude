@@ -278,6 +278,9 @@ def test_permissoes_por_perfil(
     extras += ["log:ler"] if perfil in ("Administrador", "Auditor") else []
     if perfil == "Administrador":
         extras += ["log:ver_cpf", *(f"usuario:{a}" for a in USUARIO_ACOES)]
+        extras += ["cadastro:gerenciar"]
+    if perfil in ("Administrador", "Gestor", "Gestor do Cuidado", "Navegador"):
+        extras += ["cadastro:ler"]
     assert permissoes == sorted([*esperadas, *extras])
 
 

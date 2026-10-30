@@ -27,6 +27,10 @@ class Evento(StrEnum):
     # Nome de evento, não senha (falso positivo de S105/B105).
     PASSWORD_CHANGE = "password_change"  # noqa: S105  # nosec B105
     ACCESS_RESET = "access_reset"
+    CATALOG_CREATED = "catalog_created"
+    CATALOG_UPDATED = "catalog_updated"
+    CATALOG_DEACTIVATED = "catalog_deactivated"
+    CATALOG_REACTIVATED = "catalog_reactivated"
     LOG_CHAIN_VERIFIED = "log_chain_verified"
     LOG_CHAIN_BROKEN = "log_chain_broken"
     LOG_CHECKPOINT_CREATED = "log_checkpoint_created"

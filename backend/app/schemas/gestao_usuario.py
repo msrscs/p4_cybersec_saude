@@ -69,6 +69,7 @@ class UsuarioDetalhe(BaseModel):
     nome: str
     email: str
     id_unidade: int | None
+    unidade_nome: str | None
     status: str
     mfa_ativo: bool
     troca_senha_obrigatoria: bool

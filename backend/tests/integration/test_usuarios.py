@@ -41,6 +41,19 @@ def _criar(api: TestClient, **extra: object) -> dict[str, object]:
     return corpo
 
 
+def _unidade(api: TestClient) -> int:
+    resp = api.post(
+        "/unidades",
+        json={
+            "nome": f"Unidade {uuid.uuid4().hex}",
+            "tipo_unidade": "Hospital",
+            "endereco": "Rua das Flores, 10",
+        },
+    )
+    assert resp.status_code == 201, resp.text
+    return int(resp.json()["id"])
+
+
 def _id(criado: dict[str, object]) -> str:
     usuario = criado["usuario"]
     assert isinstance(usuario, dict)
@@ -95,14 +108,15 @@ def test_sem_sessao_e_sem_csrf(app_teste: FastAPI, admin: Logado) -> None:
 def test_cadastro_gera_senha_temporaria_valida_e_obriga_troca(
     app_teste: FastAPI, admin: Logado, fabrica_sessao: Fabrica, settings_integracao: Settings
 ) -> None:
-    dados = _novo(grupos=["Navegador"], id_unidade=7)
+    dados = _novo(grupos=["Navegador"], id_unidade=_unidade(admin.api))
     resp = admin.api.post("/usuarios", json=dados)
     assert resp.status_code == 201
     assert resp.headers["cache-control"] == "no-store"
     corpo = resp.json()
     usuario = corpo["usuario"]
     assert usuario["cpf"] == dados["cpf"] and usuario["nome"] == "Joana Prado"
-    assert usuario["grupos"] == ["Navegador"] and usuario["id_unidade"] == 7
+    assert usuario["grupos"] == ["Navegador"] and usuario["id_unidade"] == dados["id_unidade"]
+    assert usuario["unidade_nome"] is not None
     assert usuario["troca_senha_obrigatoria"] is True and usuario["mfa_ativo"] is False
     assert usuario["proprio"] is False
     temporaria = corpo["senha_temporaria"]
@@ -273,12 +287,13 @@ def test_grupos_disponiveis(admin: Logado) -> None:
 def test_edicao_parcial_e_login_pelo_cpf_continua(
     admin: Logado, fabrica_sessao: Fabrica, settings_integracao: Settings
 ) -> None:
-    dados = _novo(id_unidade=3)
+    id_unidade = _unidade(admin.api)
+    dados = _novo(id_unidade=id_unidade)
     alvo = _id(admin.api.post("/usuarios", json=dados).json())
     url = f"/usuarios/{alvo}"
     corpo = admin.api.patch(url, json={"nome": "Joana Lima"}).json()
     assert corpo["nome"] == "Joana Lima" and corpo["email"] == dados["email"]
-    assert corpo["id_unidade"] == 3
+    assert corpo["id_unidade"] == id_unidade
     novo_email = f"novo{gerar_cpf()}@recife.pe.gov.br"
     corpo = admin.api.patch(url, json={"email": novo_email.upper(), "id_unidade": None}).json()
     assert corpo["email"] == novo_email and corpo["id_unidade"] is None
@@ -410,6 +425,40 @@ def test_contagem_de_administradores_ignora_inativos_e_o_proprio(
     antes = outros()
     assert admin.api.delete(f"/usuarios/{alvo}").status_code == 204
     assert outros() == antes - 1
+
+
+# --- Unidade -----------------------------------------------------------------------------
+
+
+def test_unidade_precisa_existir_e_estar_ativa(admin: Logado) -> None:
+    assert admin.api.post("/usuarios", json=_novo(id_unidade=2_000_000)).status_code == 422
+    unidade = _unidade(admin.api)
+    assert admin.api.delete(f"/unidades/{unidade}").status_code == 204
+    resp = admin.api.post("/usuarios", json=_novo(id_unidade=unidade))
+    assert resp.status_code == 422
+    assert resp.json() == {"detail": "Unidade inválida."}
+    alvo = _id(_criar(admin.api))
+    assert admin.api.patch(f"/usuarios/{alvo}", json={"id_unidade": unidade}).status_code == 422
+
+
+def test_troca_de_unidade_e_usuario_em_unidade_inativa(admin: Logado) -> None:
+    a, b = _unidade(admin.api), _unidade(admin.api)
+    alvo = _id(_criar(admin.api, id_unidade=a))
+    url = f"/usuarios/{alvo}"
+    corpo = admin.api.patch(url, json={"id_unidade": b}).json()
+    assert corpo["id_unidade"] == b
+
+    # Com usuário ativo a unidade não pode ser inativada; depois de movê-lo, pode.
+    resp = admin.api.delete(f"/unidades/{b}")
+    assert resp.status_code == 409
+    assert "usuários ativos" in resp.json()["detail"]
+    assert admin.api.delete(url).status_code == 204
+    assert admin.api.delete(f"/unidades/{b}").status_code == 204
+    assert admin.api.post(f"{url}/reativar").status_code == 204
+
+    # Usuário preso a unidade inativa: mantém o valor ao editar outros campos.
+    corpo = admin.api.patch(url, json={"nome": "Nome Novo", "id_unidade": b}).json()
+    assert corpo["nome"] == "Nome Novo" and corpo["id_unidade"] == b
 
 
 # --- Grupos ------------------------------------------------------------------------------

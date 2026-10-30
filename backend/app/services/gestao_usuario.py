@@ -28,7 +28,7 @@ from app.models import Grupo, Usuario
 from app.repositories import rbac as rbac_repo
 from app.repositories import sessao as sessao_repo
 from app.repositories import usuario as usuario_repo
-from app.services import auditoria, autorizacao
+from app.services import auditoria, autorizacao, cadastro
 from app.services import usuario as usuario_service
 from app.services.auditoria import ContextoRequisicao, Evento
 from app.services.autorizacao import GrupoNaoEncontrado
@@ -72,6 +72,7 @@ class DadosUsuario:
     nome: str = field(repr=False)
     email: str = field(repr=False)
     id_unidade: int | None
+    unidade_nome: str | None
     status: str
     mfa_ativo: bool
     troca_senha_obrigatoria: bool
@@ -166,6 +167,8 @@ def cadastrar(
 ) -> tuple[DadosUsuario, str]:
     """Cria o usuário com senha temporária, exibida uma vez. Devolve os dados e a senha."""
     grupos = _grupos_validos(db, dados.grupos)
+    if dados.id_unidade is not None:
+        cadastro.validar_unidade_ativa(db, dados.id_unidade)
     temporaria = gerar_senha_temporaria()
     novo = NovoUsuario(
         cpf=dados.cpf,
@@ -213,7 +216,10 @@ def atualizar(
             raise ErroAlteracao
         usuario.email_hash = email_hash
         usuario.email_cripto = cifrar("email_cripto", alteracoes.email)
-    if "id_unidade" in alteracoes.campos:
+    if "id_unidade" in alteracoes.campos and alteracoes.id_unidade != usuario.id_unidade:
+        # Só valida se mudou: quem já está numa unidade inativa pode ter o resto editado.
+        if alteracoes.id_unidade is not None:
+            cadastro.validar_unidade_ativa(db, alteracoes.id_unidade)
         usuario.id_unidade = alteracoes.id_unidade
     try:
         with db.begin_nested():
@@ -337,6 +343,7 @@ def _dados(
         nome=_campo(settings, usuario, "nome_cripto"),
         email=_campo(settings, usuario, "email_cripto"),
         id_unidade=usuario.id_unidade,
+        unidade_nome=cadastro.nome_da_unidade(db, usuario.id_unidade),
         status=usuario.status,
         mfa_ativo=usuario.mfa_ativo,
         troca_senha_obrigatoria=usuario.troca_senha_obrigatoria,

@@ -26,6 +26,7 @@ from app.schemas.gestao_usuario import (
 from app.services import gestao_usuario
 from app.services import limite as limite_svc
 from app.services.autorizacao import GrupoNaoEncontrado, Permissao
+from app.services.cadastro import UnidadeInvalida
 from app.services.gestao_usuario import (
     Alteracoes,
     DadosUsuario,
@@ -66,6 +67,7 @@ def _detalhe(dados: DadosUsuario) -> UsuarioDetalhe:
         nome=dados.nome,
         email=dados.email,
         id_unidade=dados.id_unidade,
+        unidade_nome=dados.unidade_nome,
         status=dados.status,
         mfa_ativo=dados.mfa_ativo,
         troca_senha_obrigatoria=dados.troca_senha_obrigatoria,
@@ -140,6 +142,8 @@ def cadastrar(
         return erro(status.HTTP_409_CONFLICT, str(exc))
     except GrupoNaoEncontrado:
         return erro(status.HTTP_422_UNPROCESSABLE_CONTENT, GRUPO_INVALIDO)
+    except UnidadeInvalida as exc:
+        return erro(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc))
     response.headers.update(SEM_CACHE)
     return UsuarioCriado(usuario=_detalhe(criado), senha_temporaria=temporaria)
 
@@ -180,6 +184,8 @@ def atualizar(
         )
     except ErroAlteracao as exc:
         return erro(status.HTTP_409_CONFLICT, str(exc))
+    except UnidadeInvalida as exc:
+        return erro(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc))
     if atualizado is None:
         return erro(status.HTTP_404_NOT_FOUND, NAO_ENCONTRADO)
     response.headers.update(SEM_CACHE)

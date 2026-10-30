@@ -41,6 +41,7 @@ class FinalidadeHash(StrEnum):
     CPF = "cpf"
     EMAIL = "email"
     CODIGO_RECUPERACAO = "codigo_recuperacao"
+    CID = "cid"
 
 
 @dataclass(frozen=True)
@@ -182,6 +183,8 @@ def normalizar(finalidade: FinalidadeHash, valor: str) -> str:
             normalizado = valor.strip().lower()
         case FinalidadeHash.CODIGO_RECUPERACAO:
             normalizado = re.sub(r"[\s-]", "", valor).upper()
+        case FinalidadeHash.CID:
+            normalizado = valor.strip().upper()
         case _:  # pragma: no cover
             assert_never(finalidade)
     if not normalizado:

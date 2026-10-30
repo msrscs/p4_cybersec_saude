@@ -9,7 +9,7 @@ from app.core.cpf import validar_cpf
 from app.core.senha import BYTES_MAXIMO
 
 
-def _sem_controle(valor: str) -> str:
+def sem_controle(valor: str) -> str:
     if any(unicodedata.category(c).startswith("C") for c in valor):
         raise ValueError("Contém caracteres não permitidos.")
     return valor
@@ -25,6 +25,6 @@ Cpf = Annotated[str, StringConstraints(max_length=14), AfterValidator(validar_cp
 Nome = Annotated[
     str,
     StringConstraints(strip_whitespace=True, min_length=2, max_length=150),
-    AfterValidator(_sem_controle),
+    AfterValidator(sem_controle),
 ]
 SenhaEntrada = Annotated[str, StringConstraints(min_length=1), AfterValidator(_ate_72_bytes)]

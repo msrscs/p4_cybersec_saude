@@ -202,3 +202,35 @@ class LimiteRequisicao(Base):
     ip: Mapped[str] = mapped_column(INET, primary_key=True)
     janela: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), primary_key=True)
     total: Mapped[int] = mapped_column(default=1)
+
+
+# --- Cadastros de catálogo (RF-09/10/11). Dados públicos: sem cifragem.
+
+
+class UnidadeSaude(Base):
+    __tablename__ = "unidade_saude"
+
+    id_unidade: Mapped[int] = mapped_column(Identity(always=True), primary_key=True)
+    tipo_unidade: Mapped[str] = mapped_column(Text)
+    nome: Mapped[str] = mapped_column(Text)
+    endereco: Mapped[str] = mapped_column(Text)
+    telefone: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(Text, default="ativo")
+
+
+class ServicoSaude(Base):
+    __tablename__ = "servico_saude"
+
+    id_servico: Mapped[int] = mapped_column(Identity(always=True), primary_key=True)
+    nome: Mapped[str] = mapped_column(Text)
+    descricao: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(Text, default="ativo")
+
+
+class Cid(Base):
+    __tablename__ = "cid"
+
+    cid_hash: Mapped[bytes] = mapped_column(BYTEA, primary_key=True)
+    cid: Mapped[str] = mapped_column(Text, unique=True)
+    descricao: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(Text, default="ativo")
