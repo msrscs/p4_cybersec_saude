@@ -67,7 +67,7 @@ jobs:
       - name: Cobertura mínima nos módulos críticos (auditoria)
         run: >-
           uv run coverage report --fail-under=95
-          --include="app/core/cadeia.py,app/services/cadeia_log.py,app/services/auditoria.py,app/repositories/log.py"
+          --include="app/core/cadeia.py,app/services/cadeia_log.py,app/services/auditoria.py,app/services/consulta_log.py,app/repositories/log.py,app/api/logs.py,app/schemas/log.py"
       - name: Cobertura mínima nos módulos críticos (RBAC e pacientes)
         run: >-
           uv run coverage report --fail-under=90

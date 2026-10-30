@@ -47,9 +47,9 @@ Dados do paciente.
 
 **RF-04 Consulta de logs de auditoria (auditor)**
 Log WORM do Sistema. Logar tudo.
-- [ ] Somente leitura, com filtros por data/usuário/acao
+- [x] Somente leitura, com filtros por data/usuário/acao (Auditor e Administrador — ADR-0015)
 - [x] Verificação de integridade da cadeia de hashes
-- [ ] Dados sensíveis devem está criptografados ou hash.
+- [x] Dados sensíveis devem está criptografados ou hash.
 - [ ] Tabela: [log] Campos: [id_log, acao, resumo_acessado, ip_origem, request_id, geolocaliacao, data_hora, hash_assinatura_worm, cpf_paciente_hash, cpf_usuario_hash, id_oci]
 
 **RF-05 Cadastro Papel RBAC**
