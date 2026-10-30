@@ -1,11 +1,11 @@
-// Telas de unidades, serviços e CID (RF-09/10/11, ADR-0019): um só componente, três catálogos.
+// Telas de catálogo (ADR-0019, ADR-0021): um só componente para todos os cadastros.
 // A interface esconde o que o perfil não pode fazer; quem autoriza é o backend.
 import {
   corpoDoFormulario,
   erroDoFormulario,
   formatarTelefone,
+  opcoesAtivas,
   PADRAO_CID,
-  TIPOS_UNIDADE,
 } from './lib/cadastros.js';
 import { definirStatus, el } from './lib/dom.js';
 
@@ -13,6 +13,28 @@ const $ = (id) => document.getElementById(id);
 const ROTULO_STATUS = { ativo: 'Ativo', inativo: 'Inativo' };
 
 export const CATALOGOS = {
+  tiposUnidade: {
+    secao: 'secao-tipos-unidade',
+    rota: '/tipos-unidade',
+    titulo: 'Tipos de unidade',
+    singular: 'tipo',
+    novo: 'Novo tipo',
+    identificacao: (item) => item.nome,
+    campos: [
+      { nome: 'nome', rotulo: 'Nome do tipo', max: 150 },
+      {
+        nome: 'descricao',
+        rotulo: 'Descrição do tipo (opcional)',
+        max: 500,
+        opcional: true,
+        vazio: '',
+      },
+    ],
+    colunas: [
+      { titulo: 'Nome', valor: (item) => item.nome },
+      { titulo: 'Descrição', valor: (item) => item.descricao || '—' },
+    ],
+  },
   unidades: {
     secao: 'secao-unidades',
     rota: '/unidades',
@@ -22,7 +44,14 @@ export const CATALOGOS = {
     identificacao: (item) => item.nome,
     campos: [
       { nome: 'nome', rotulo: 'Nome da unidade', max: 150 },
-      { nome: 'tipo_unidade', rotulo: 'Tipo da unidade', opcoes: TIPOS_UNIDADE },
+      {
+        nome: 'id_tipo_unidade',
+        rotulo: 'Tipo da unidade',
+        numerico: true,
+        opcoesDe: '/tipos-unidade/opcoes',
+        nomeAtual: (item) => item.tipo_unidade,
+        sufixoInativo: '(inativo)',
+      },
       { nome: 'endereco', rotulo: 'Endereço da unidade', max: 300 },
       {
         nome: 'telefone',
@@ -87,13 +116,7 @@ export const CATALOGOS = {
 };
 
 function controleDoCampo(campo, id) {
-  if (campo.opcoes) {
-    return el(
-      'select',
-      { id },
-      campo.opcoes.map((opcao) => el('option', { value: opcao }, opcao)),
-    );
-  }
+  if (campo.opcoesDe) return el('select', { id });
   return el('input', { id, type: 'text', maxlength: campo.max, autocomplete: 'off' });
 }
 
@@ -136,7 +159,29 @@ export function criarCadastro(chamarApi, catalogo, podeGerenciar) {
     return valores;
   }
 
-  function abrirForm(item = null) {
+  // Combobox vinda da API: sem as opções o formulário não abre, para não gravar valor errado.
+  async function carregarOpcoes(item) {
+    for (const campo of catalogo.campos.filter((c) => c.opcoesDe)) {
+      const { opcoes } = await chamarApi('GET', campo.opcoesDe);
+      const lista = opcoesAtivas(
+        opcoes,
+        item?.[campo.nome],
+        item ? campo.nomeAtual(item) : null,
+        campo.sufixoInativo,
+      );
+      $(idCampo(campo)).replaceChildren(
+        ...lista.map(({ valor, rotulo }) => el('option', { value: valor }, rotulo)),
+      );
+    }
+  }
+
+  async function abrirForm(item = null) {
+    try {
+      await carregarOpcoes(item);
+    } catch (erro) {
+      definirStatus(status, erro.message, 'error');
+      return;
+    }
     editando = item;
     form.reset();
     tituloForm.textContent = item ? `Editar ${catalogo.singular}` : catalogo.novo;

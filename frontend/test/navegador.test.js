@@ -7,6 +7,7 @@ import {
   corpoDoFormulario,
   erroDoFormulario,
   formatarTelefone,
+  opcoesAtivas,
   opcoesDeUnidade,
   PADRAO_CID,
 } from '../public/js/lib/cadastros.js';
@@ -36,6 +37,23 @@ describe('cadastros', () => {
       descricao: 'Mama',
       telefone: null,
     });
+  });
+
+  it('campo numérico vai como número', () => {
+    const numerico = [{ nome: 'id_tipo_unidade', rotulo: 'Tipo', numerico: true }];
+    assert.deepEqual(corpoDoFormulario(numerico, { id_tipo_unidade: '3' }, false), {
+      id_tipo_unidade: 3,
+    });
+    assert.equal(erroDoFormulario(numerico, { id_tipo_unidade: '' }, false), 'Preencha: Tipo.');
+  });
+
+  it('combobox de tipo mantém visível o tipo atual inativo', () => {
+    assert.deepEqual(opcoesAtivas([{ id: 1, nome: 'Hospital' }], 1, 'Hospital', '(inativo)'), [
+      { valor: '1', rotulo: 'Hospital' },
+    ]);
+    assert.deepEqual(opcoesAtivas([], 7, 'Antigo', '(inativo)'), [
+      { valor: '7', rotulo: 'Antigo (inativo)' },
+    ]);
   });
 
   it('confere preenchimento e formato', () => {

@@ -225,11 +225,49 @@ test('auditoria: lista, filtra por evento e por CPF, e mostra detalhes', async (
 });
 
 test('cadastros: unidade, serviço e CID, com busca, edição, duplicado e inativação', async () => {
+  // Tipo novo pela tela, escolhido depois na combobox da unidade.
+  await page.getByRole('button', { name: 'Tipos de unidade' }).click();
+  await expect(page.getByRole('heading', { name: 'Tipos de unidade' })).toBeVisible();
+  await expect(
+    page.locator('#secao-tipos-unidade tbody tr', { hasText: 'Hospital' }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Novo tipo' }).click();
+  await page.getByLabel('Nome do tipo').fill('Policlínica');
+  await page.getByRole('button', { name: 'Salvar tipo' }).click();
+  const tipo = page.locator('#secao-tipos-unidade tbody tr', { hasText: 'Policlínica' });
+  await expect(tipo.locator('.selo')).toHaveText('Ativo');
+
   await page.getByRole('button', { name: 'Unidades', exact: true }).click();
+  await page.getByRole('button', { name: 'Nova unidade' }).click();
+  await page.getByLabel('Nome da unidade').fill('Poli E2E');
+  await page.getByLabel('Tipo da unidade').selectOption({ label: 'Policlínica' });
+  await page.getByLabel('Endereço da unidade').fill('Rua Poli, 1');
+  await page.getByRole('button', { name: 'Salvar unidade' }).click();
+  const poli = page.locator('#secao-unidades tbody tr', { hasText: 'Poli E2E' });
+  await expect(poli).toContainText('Policlínica');
+
+  // Tipo em uso não pode ser inativado.
+  await page.getByRole('button', { name: 'Tipos de unidade' }).click();
+  await tipo.getByRole('button', { name: /^Inativar/ }).click();
+  await expect(page.locator('#secao-tipos-unidade > .form__status')).toHaveText(
+    'Há unidades ativas deste tipo: mude o tipo delas antes de inativar.',
+  );
+  await expect(tipo.locator('.selo')).toHaveText('Ativo');
+
+  // Editar: a combobox abre no tipo atual e deixa trocar.
+  await page.getByRole('button', { name: 'Unidades', exact: true }).click();
+  await poli.getByRole('button', { name: /^Editar/ }).click();
+  await expect(page.getByLabel('Tipo da unidade').locator('option:checked')).toHaveText(
+    'Policlínica',
+  );
+  await page.getByLabel('Tipo da unidade').selectOption({ label: 'Clínica' });
+  await page.getByRole('button', { name: 'Salvar unidade' }).click();
+  await expect(poli).toContainText('Clínica');
+
   await expect(page.getByRole('heading', { name: 'Unidades de saúde' })).toBeVisible();
   await page.getByRole('button', { name: 'Nova unidade' }).click();
   await page.getByLabel('Nome da unidade').fill('UBS E2E');
-  await page.getByLabel('Tipo da unidade').selectOption('Hospital');
+  await page.getByLabel('Tipo da unidade').selectOption({ label: 'Hospital' });
   await page.getByLabel('Endereço da unidade').fill('Av. Norte, 100');
   await page.getByLabel('Telefone com DDD (opcional)').fill('(81) 3355-0000');
   await page.getByRole('button', { name: 'Salvar unidade' }).click();
@@ -366,6 +404,7 @@ test('no celular a página não tem rolagem lateral, em nenhuma seção', async 
   await page.setViewportSize({ width: 390, height: 800 });
   for (const secao of [
     'Usuários',
+    'Tipos de unidade',
     'Unidades',
     'Serviços',
     'CID',

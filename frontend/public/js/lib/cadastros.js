@@ -1,6 +1,5 @@
 // Funções puras dos cadastros de catálogo (sem DOM).
 
-export const TIPOS_UNIDADE = ['Posto de Saúde', 'Clínica', 'Hospital', 'Laboratório'];
 export const PADRAO_CID = /^[A-Za-z][0-9]{2}(\.[0-9A-Za-z]{1,2})?$/;
 
 export function formatarTelefone(digitos) {
@@ -15,7 +14,8 @@ export function corpoDoFormulario(campos, valores, editando) {
   for (const campo of campos) {
     if (editando && campo.soNaCriacao) continue;
     const valor = (valores[campo.nome] ?? '').trim();
-    corpo[campo.nome] = valor === '' && campo.opcional ? campo.vazio : valor;
+    if (valor === '' && campo.opcional) corpo[campo.nome] = campo.vazio;
+    else corpo[campo.nome] = campo.numerico ? Number(valor) : valor;
   }
   return corpo;
 }
@@ -31,11 +31,18 @@ export function erroDoFormulario(campos, valores, editando) {
   return null;
 }
 
-/** Opções da combobox de unidade; a unidade atual inativa continua visível para não sumir. */
-export function opcoesDeUnidade(ativas, atualId, atualNome) {
+/** Opções de combobox: os ativos, mais o valor atual se estiver inativo, para ele não sumir. */
+export function opcoesAtivas(ativas, atualId, atualNome, sufixoInativo) {
   const opcoes = ativas.map(({ id, nome }) => ({ valor: String(id), rotulo: nome }));
   if (atualId !== null && atualId !== undefined && !ativas.some(({ id }) => id === atualId)) {
-    opcoes.push({ valor: String(atualId), rotulo: `${atualNome ?? atualId} (inativa)` });
+    opcoes.push({ valor: String(atualId), rotulo: `${atualNome ?? atualId} ${sufixoInativo}` });
   }
-  return [{ valor: '', rotulo: 'Sem unidade' }, ...opcoes];
+  return opcoes;
+}
+
+export function opcoesDeUnidade(ativas, atualId, atualNome) {
+  return [
+    { valor: '', rotulo: 'Sem unidade' },
+    ...opcoesAtivas(ativas, atualId, atualNome, '(inativa)'),
+  ];
 }
