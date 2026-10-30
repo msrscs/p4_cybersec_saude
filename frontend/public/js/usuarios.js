@@ -3,6 +3,7 @@
 import { opcoesDeUnidade } from './lib/cadastros.js';
 import { cpfValido, formatarCpf, somenteDigitos } from './lib/cpf.js';
 import { definirStatus, el } from './lib/dom.js';
+import { corpoDaLista, erroDaBusca } from './lib/usuarios.js';
 
 const $ = (id) => document.getElementById(id);
 const ROTULO_STATUS = { ativo: 'Ativo', inativo: 'Inativo', bloqueado: 'Bloqueado' };
@@ -15,6 +16,7 @@ export function criarUsuarios(chamarApi, permissoes) {
   let cursorAtual = null;
   let cursorProximo = null;
   const cursoresAnteriores = [];
+  let filtros = {};
 
   // --- Grupos (caixas de seleção) --------------------------------------------------------
 
@@ -263,6 +265,7 @@ export function criarUsuarios(chamarApi, permissoes) {
       {},
       el('td', {}, legivel ? usuario.nome : 'Cadastro ilegível'),
       el('td', {}, el('code', {}, usuario.cpf_mascarado ?? '—')),
+      el('td', {}, usuario.unidade_nome ?? '—'),
       el('td', {}, usuario.grupos.join(', ') || '—'),
       el(
         'td',
@@ -293,9 +296,11 @@ export function criarUsuarios(chamarApi, permissoes) {
   async function carregarLista() {
     const status = $('status-lista-usuarios');
     try {
-      const { itens, proximo } = await chamarApi('POST', '/usuarios/lista', {
-        depois: cursorAtual,
-      });
+      const { itens, proximo } = await chamarApi(
+        'POST',
+        '/usuarios/lista',
+        corpoDaLista(filtros, cursorAtual),
+      );
       cursorProximo = proximo;
       $('corpo-usuarios').replaceChildren(...itens.map(linha));
       $('usuarios-anterior').disabled = cursoresAnteriores.length === 0;
@@ -303,6 +308,64 @@ export function criarUsuarios(chamarApi, permissoes) {
       definirStatus(status, itens.length === 0 ? 'Nenhum usuário encontrado.' : '');
     } catch (erro) {
       definirStatus(status, erro.message, 'error');
+    }
+  }
+
+  function recomecar() {
+    cursorAtual = null;
+    cursoresAnteriores.length = 0;
+    return carregarLista();
+  }
+
+  $('filtros-usuarios').addEventListener('submit', (evento) => {
+    evento.preventDefault();
+    const busca = $('usuarios-busca').value.trim();
+    const problema = erroDaBusca(busca);
+    if (problema) {
+      definirStatus($('status-lista-usuarios'), problema, 'error');
+      return;
+    }
+    filtros = {
+      busca,
+      grupo: $('usuarios-filtro-grupo').value,
+      unidade: $('usuarios-filtro-unidade').value,
+    };
+    recomecar();
+  });
+
+  $('usuarios-limpar').addEventListener('click', () => {
+    $('filtros-usuarios').reset();
+    filtros = {};
+    recomecar();
+  });
+
+  function preencherFiltro(id, rotuloVazio, opcoes) {
+    const select = $(id);
+    const atual = select.value;
+    select.replaceChildren(
+      el('option', { value: '' }, rotuloVazio),
+      ...opcoes.map(({ valor, rotulo }) => el('option', { value: valor }, rotulo)),
+    );
+    select.value = opcoes.some(({ valor }) => valor === atual) ? atual : '';
+  }
+
+  // Sem a lista de unidades, a tela segue funcionando, só sem esse filtro.
+  async function carregarFiltroDeUnidade() {
+    const campo = $('campo-filtro-unidade');
+    if (!permissoes.has('cadastro:ler')) {
+      campo.hidden = true;
+      return;
+    }
+    try {
+      const { opcoes } = await chamarApi('GET', '/unidades/opcoes');
+      preencherFiltro(
+        'usuarios-filtro-unidade',
+        'Todas',
+        opcoes.map(({ id, nome }) => ({ valor: String(id), rotulo: nome })),
+      );
+      campo.hidden = false;
+    } catch {
+      campo.hidden = true;
     }
   }
 
@@ -327,6 +390,12 @@ export function criarUsuarios(chamarApi, permissoes) {
         definirStatus($('status-lista-usuarios'), erro.message, 'error');
         return;
       }
+      preencherFiltro(
+        'usuarios-filtro-grupo',
+        'Todos',
+        gruposDisponiveis.map((grupo) => ({ valor: grupo, rotulo: grupo })),
+      );
+      await carregarFiltroDeUnidade();
       await carregarLista();
     },
   };

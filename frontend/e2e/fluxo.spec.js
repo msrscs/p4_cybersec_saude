@@ -362,7 +362,8 @@ test('usuários: cadastrar com senha temporária, grupos, inativar, reativar e r
   await page.getByRole('button', { name: 'Salvar grupos' }).click();
   await expect(page.locator('#status-usuario')).toHaveText('Grupos atualizados.');
   const linha = page.locator('#corpo-usuarios tr').first();
-  await expect(linha.locator('td').nth(2)).toHaveText('Navegador, Auditor');
+  await expect(linha.locator('td').nth(2)).toHaveText('UBS E2E');
+  await expect(linha.locator('td').nth(3)).toHaveText('Navegador, Auditor');
   await expect(linha.locator('code')).toHaveText(/^\*\*\*\.\d{3}\.\d{3}-\*\*$/);
 
   await page.getByRole('button', { name: 'Editar usuário' }).click();
@@ -388,6 +389,38 @@ test('usuários: cadastrar com senha temporária, grupos, inativar, reativar e r
   await page.getByRole('button', { name: 'Já entreguei a senha' }).click();
   await expect(ficha).toBeVisible();
   await page.getByRole('button', { name: 'Fechar ficha' }).click();
+
+  // Filtros da lista: nome (sem acento nem maiúscula), CPF, grupo e unidade.
+  const lista = page.locator('#corpo-usuarios tr');
+  const filtrar = () =>
+    page.locator('#filtros-usuarios').getByRole('button', { name: 'Filtrar' }).click();
+  await page.getByLabel('Buscar por nome ou CPF').fill('rita navegadora');
+  await filtrar();
+  await expect(lista).toHaveCount(1);
+  await expect(lista.first()).toContainText('Rita Navegadora');
+
+  await page.getByLabel('Buscar por nome ou CPF').fill(cpf);
+  await filtrar();
+  await expect(lista).toHaveCount(1);
+  await expect(lista.first()).toContainText('Rita Navegadora');
+
+  await page.getByLabel('Buscar por nome ou CPF').fill('123');
+  await filtrar();
+  await expect(page.locator('#status-lista-usuarios')).toHaveText(
+    'Para buscar por CPF, informe os 11 dígitos.',
+  );
+
+  await page.getByLabel('Buscar por nome ou CPF').fill('');
+  await page.getByLabel('Filtrar por grupo').selectOption('Auditor');
+  await page.getByLabel('Filtrar por unidade').selectOption({ label: 'UBS E2E' });
+  await filtrar();
+  await expect(lista).toHaveCount(1);
+  await page.getByLabel('Filtrar por grupo').selectOption('Gestor');
+  await filtrar();
+  await expect(lista).toHaveCount(0);
+  await expect(page.locator('#status-lista-usuarios')).toHaveText('Nenhum usuário encontrado.');
+  await page.locator('#secao-usuarios').getByRole('button', { name: 'Limpar filtros' }).click();
+  await expect(page.locator('#corpo-usuarios tr', { hasText: 'Admin E2E' })).toBeVisible();
 
   // Unidade com usuário ativo não pode ser inativada.
   await page.getByRole('button', { name: 'Unidades', exact: true }).click();

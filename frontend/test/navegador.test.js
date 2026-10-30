@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { cabecalhos, MENSAGENS, mensagemDeErro } from '../public/js/lib/api.js';
+import { corpoDaLista, erroDaBusca } from '../public/js/lib/usuarios.js';
 import {
   corpoDoFormulario,
   erroDoFormulario,
@@ -18,6 +19,28 @@ import {
   periodoValido,
   rotuloDaAcao,
 } from '../public/js/lib/logs.js';
+
+describe('filtros de usuários', () => {
+  it('filtro vazio não vai na consulta e a unidade vira número', () => {
+    assert.deepEqual(corpoDaLista({}, null), { depois: null });
+    assert.deepEqual(corpoDaLista({ busca: '', grupo: '', unidade: '' }, 'x'), { depois: 'x' });
+    assert.deepEqual(corpoDaLista({ busca: 'Ana', grupo: 'Gestor', unidade: '3' }, null), {
+      depois: null,
+      busca: 'Ana',
+      grupo: 'Gestor',
+      id_unidade: 3,
+    });
+  });
+
+  it('avisa quando a busca não pode dar certo', () => {
+    assert.equal(erroDaBusca(''), null);
+    assert.equal(erroDaBusca('Ana'), null);
+    assert.equal(erroDaBusca('529.982.247-25'), null);
+    assert.equal(erroDaBusca('52998224725'), null);
+    assert.equal(erroDaBusca('A'), 'Digite ao menos 2 letras do nome.');
+    assert.equal(erroDaBusca('529.982'), 'Para buscar por CPF, informe os 11 dígitos.');
+  });
+});
 
 describe('cadastros', () => {
   const campos = [

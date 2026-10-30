@@ -441,12 +441,33 @@
 
             <h2 class="lista">Lista de usuários</h2>
             <p class="dica">Cadastrados mais recentemente primeiro.</p>
+            <form class="filtros" id="filtros-usuarios" novalidate autocomplete="off">
+              <div class="field">
+                <label for="usuarios-busca">Buscar por nome ou CPF</label>
+                <input id="usuarios-busca" type="search" maxlength="150" autocomplete="off" />
+              </div>
+              <div class="field">
+                <label for="usuarios-filtro-grupo">Filtrar por grupo</label>
+                <select id="usuarios-filtro-grupo"></select>
+              </div>
+              <div class="field" id="campo-filtro-unidade">
+                <label for="usuarios-filtro-unidade">Filtrar por unidade</label>
+                <select id="usuarios-filtro-unidade"></select>
+              </div>
+              <div class="acoes">
+                <button class="button button--pequeno" type="submit">Filtrar</button>
+                <button class="link link--botao" type="button" id="usuarios-limpar">
+                  Limpar filtros
+                </button>
+              </div>
+            </form>
             <div class="tabela">
               <table>
                 <thead>
                   <tr>
                     <th scope="col">Nome</th>
                     <th scope="col">CPF</th>
+                    <th scope="col">Unidade</th>
                     <th scope="col">Grupos</th>
                     <th scope="col">Situação</th>
                     <th scope="col"><span class="sr-only">Ação</span></th>
