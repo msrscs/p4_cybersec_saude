@@ -264,7 +264,7 @@ def test_lista_mostra_a_unidade(admin: Logado) -> None:
 
 
 def test_busca_por_nome_ignora_maiusculas_e_acentos_e_acha_parte_do_nome(admin: Logado) -> None:
-    marca = uuid.uuid4().hex[:8]
+    marca = f"m{uuid.uuid4().hex[:8]}"  # com letra: só dígitos seria busca por CPF
     alvo = f"José Açucena {marca}"
     _criar(admin.api, nome=alvo)
     _criar(admin.api, nome=f"Outra Pessoa {marca}")
@@ -289,7 +289,7 @@ def test_cpf_parcial_ou_invalido_nao_devolve_ninguem(admin: Logado, termo: str) 
 
 
 def test_filtros_por_grupo_e_unidade_e_combinados(admin: Logado) -> None:
-    marca = uuid.uuid4().hex[:8]
+    marca = f"m{uuid.uuid4().hex[:8]}"  # com letra: só dígitos seria busca por CPF
     a, b = _unidade(admin.api), _unidade(admin.api)
     _criar(admin.api, nome=f"Um {marca}", id_unidade=a, grupos=["Gestor"])
     _criar(admin.api, nome=f"Dois {marca}", id_unidade=a, grupos=["Auditor"])
@@ -304,7 +304,7 @@ def test_filtros_por_grupo_e_unidade_e_combinados(admin: Logado) -> None:
 
 
 def test_busca_por_nome_pagina_sem_repetir(admin: Logado) -> None:
-    marca = uuid.uuid4().hex[:8]
+    marca = f"m{uuid.uuid4().hex[:8]}"  # com letra: só dígitos seria busca por CPF
     criados = {_id(_criar(admin.api, nome=f"Lote {marca}")) for _ in range(23)}
     _criar(admin.api, nome=f"Fora {uuid.uuid4().hex[:8]}")  # não pode aparecer
     primeira = admin.api.post("/usuarios/lista", json={"busca": f"lote {marca}"}).json()
@@ -318,7 +318,7 @@ def test_busca_por_nome_pagina_sem_repetir(admin: Logado) -> None:
 
 
 def test_busca_atravessa_mais_de_um_lote(admin: Logado, monkeypatch: pytest.MonkeyPatch) -> None:
-    marca = uuid.uuid4().hex[:8]
+    marca = f"m{uuid.uuid4().hex[:8]}"  # com letra: só dígitos seria busca por CPF
     alvo = f"Antigo {marca}"
     _criar(admin.api, nome=alvo)
     for _ in range(3):
@@ -330,7 +330,7 @@ def test_busca_atravessa_mais_de_um_lote(admin: Logado, monkeypatch: pytest.Monk
 def test_cadastro_ilegivel_nao_derruba_a_busca_por_nome(
     admin: Logado, fabrica_sessao: Fabrica
 ) -> None:
-    marca = uuid.uuid4().hex[:8]
+    marca = f"m{uuid.uuid4().hex[:8]}"  # com letra: só dígitos seria busca por CPF
     bom = f"Legivel {marca}"
     _criar(admin.api, nome=bom)
     ruim = _id(_criar(admin.api, nome=f"Legivel {uuid.uuid4().hex[:8]}"))
@@ -343,7 +343,7 @@ def test_cadastro_ilegivel_nao_derruba_a_busca_por_nome(
 def test_termo_pesquisado_nao_vai_para_o_log(
     admin: Logado, fabrica_sessao: Fabrica, settings_integracao: Settings
 ) -> None:
-    marca = uuid.uuid4().hex[:8]
+    marca = f"m{uuid.uuid4().hex[:8]}"  # com letra: só dígitos seria busca por CPF
     dados = _novo(nome=f"Sigilosa {marca}", grupos=["Gestor"])
     admin.api.post("/usuarios", json=dados)
     id_unidade = _unidade(admin.api)

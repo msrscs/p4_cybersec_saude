@@ -1,6 +1,6 @@
 """ADR-0020: importação do catálogo de CID por script."""
 
-import uuid
+import itertools
 from pathlib import Path
 
 import pytest
@@ -15,8 +15,12 @@ from scripts import importar_cid
 Fabrica = sessionmaker[Session]
 
 
+_PROXIMO = itertools.count()
+
+
 def _codigo() -> str:
-    return f"T{uuid.uuid4().int % 100:02d}.{uuid.uuid4().hex[:2].upper()}"
+    # Sequencial, não aleatório: dois testes nunca geram o mesmo código na mesma rodada.
+    return f"T{next(_PROXIMO):02d}.AA"
 
 
 def _csv(pasta: Path, linhas: list[str], cabecalho: str = "cid,descricao") -> Path:

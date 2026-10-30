@@ -132,6 +132,14 @@ def app_com_limite(settings_integracao: Settings) -> Iterator[FastAPI]:
     app.state.engine.dispose()
 
 
+@pytest.fixture
+def relogio_parado(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A janela fixa zera ao virar o minuto: sem isso, o teste falha se cruzar a virada."""
+    agora = datetime.now(UTC)
+    monkeypatch.setattr("app.api.deps.agora", lambda: agora)
+
+
+@pytest.mark.usefixtures("relogio_parado")
 def test_login_limitado_por_ip_com_retry_after(
     app_com_limite: FastAPI, fabrica_sessao: Fabrica
 ) -> None:
@@ -157,6 +165,7 @@ def test_login_limitado_por_ip_com_retry_after(
     assert _cliente(app_com_limite).post("/auth/login", json=corpo).status_code == 401
 
 
+@pytest.mark.usefixtures("relogio_parado")
 def test_tentativas_invalidas_tambem_contam(app_com_limite: FastAPI) -> None:
     api = _cliente(app_com_limite)
     for _ in range(10):
@@ -164,6 +173,7 @@ def test_tentativas_invalidas_tambem_contam(app_com_limite: FastAPI) -> None:
     assert api.post("/auth/login", json={"cpf": "1", "senha": "x"}).status_code == 429
 
 
+@pytest.mark.usefixtures("relogio_parado")
 def test_mfa_limitado_por_ip(app_com_limite: FastAPI) -> None:
     api = _cliente(app_com_limite)
     for _ in range(15):
@@ -171,6 +181,7 @@ def test_mfa_limitado_por_ip(app_com_limite: FastAPI) -> None:
     assert api.post("/auth/mfa/verificar", json={"codigo": "123456"}).status_code == 429
 
 
+@pytest.mark.usefixtures("relogio_parado")
 def test_busca_de_pacientes_limitada_contra_varredura(
     app_com_limite: FastAPI, fabrica_sessao: Fabrica, settings_integracao: Settings
 ) -> None:
@@ -181,6 +192,7 @@ def test_busca_de_pacientes_limitada_contra_varredura(
     assert api.get(f"/pacientes/{uuid.uuid4()}").status_code == 404  # outras rotas seguem
 
 
+@pytest.mark.usefixtures("relogio_parado")
 def test_lista_de_pacientes_limitada_contra_extracao_em_massa(
     app_com_limite: FastAPI, fabrica_sessao: Fabrica, settings_integracao: Settings
 ) -> None:
@@ -192,6 +204,7 @@ def test_lista_de_pacientes_limitada_contra_extracao_em_massa(
     assert "retry-after" in resp.headers
 
 
+@pytest.mark.usefixtures("relogio_parado")
 def test_consulta_do_log_limitada(
     app_com_limite: FastAPI, fabrica_sessao: Fabrica, settings_integracao: Settings
 ) -> None:
