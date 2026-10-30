@@ -63,7 +63,7 @@ jobs:
       - name: Cobertura mínima nos módulos críticos (auth)
         run: >-
           uv run coverage report --fail-under=90
-          --include="app/core/senha.py,app/core/cpf.py,app/core/totp.py,app/services/auth.py,app/services/usuario.py,app/services/mfa.py,app/services/sessao.py,app/api/auth.py,app/api/mfa.py,app/api/deps.py"
+          --include="app/core/senha.py,app/core/cpf.py,app/core/totp.py,app/services/auth.py,app/services/usuario.py,app/services/mfa.py,app/services/sessao.py,app/services/gestao_usuario.py,app/api/auth.py,app/api/mfa.py,app/api/usuarios.py,app/api/deps.py,app/schemas/gestao_usuario.py"
       - name: Cobertura mínima nos módulos críticos (auditoria)
         run: >-
           uv run coverage report --fail-under=95

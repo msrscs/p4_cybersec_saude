@@ -21,7 +21,8 @@ cd backend && uv run --env-file ../.env python -m scripts.criar_usuario \
 
 ## Acesso e recuperação
 - **1º acesso:** CPF + senha → cadastro do MFA (QR code no Google/Microsoft Authenticator) → guarde os 10 códigos de recuperação.
-- **Esqueceu a senha ou perdeu o celular e os códigos:** um administrador roda
+- **Novos usuários, grupos e reset de acesso:** pela tela **Usuários**, com perfil Administrador (ADR-0017). Os scripts abaixo ficam para o primeiro administrador e para emergências.
+- **Esqueceu a senha ou perdeu o celular e os códigos, sem administrador disponível:** quem tem acesso ao servidor roda
   `cd backend && uv run --env-file ../.env python -m scripts.resetar_acesso --cpf ...`,
   que gera uma senha temporária (mostrada uma vez); o usuário recadastra o MFA e troca a senha.
 

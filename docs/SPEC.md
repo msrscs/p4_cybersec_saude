@@ -26,7 +26,7 @@ Como usuário, quero fazer o login, mudar a senha e recuperar o acesso ao sistem
 - [ ] Ativação do MFA obrigatória no primeiro acesso
 - [ ] Criptografar dados sensíveis
 - [ ] Tabela: [usuario] Campos: [cpf_hash, cpf_cripto, nome_cripto, email_cripto, unidade, senha_hash_salt, status]
-- [ ] CRUD, mudança status
+- [x] CRUD, mudança status (exclusão lógica; só Administrador — ADR-0017)
 - [ ] Conferir digitos verificador do CPF
 - [ ] Sanitizar entradas de dados
 
