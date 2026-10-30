@@ -101,7 +101,7 @@ Relacionamentos.
 - [ ] Tabela: [usuario_grupo] Campos: [fk_usuario_cpf_hash, fk_grupo_id_grupo]
 - [ ] Tabela: [log_oci] Campos: [fk_log_id_log, fk_oci_id_oci]
 - [ ] Tabela: [tipo_oci_cid] Campos: [fk_tipo_oci_tipo_oci_id, fk_cid_cid_hash]
-- [ ] Tabela: [unidade_saude_servico_saude] Campos: [fk_unidade_saude_id_unidade, fk_servico_saude_id_servico]
+- [x] Tabela: [unidade_saude_servico_saude] Campos: [fk_unidade_saude_id_unidade, fk_servico_saude_id_servico]
 - [ ] Tabela: [cid_servico_saude] Campos: [fk_cid_cid_hash, fk_servico_saude_id_servico]
 
 ## 4. Requisitos não funcionais / segurança
