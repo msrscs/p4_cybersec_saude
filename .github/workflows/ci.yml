@@ -76,6 +76,10 @@ jobs:
         run: >-
           uv run coverage report --fail-under=90
           --include="app/services/limite.py,app/repositories/limite.py,app/services/manutencao.py,app/core/headers.py,app/core/db_url.py"
+      - name: Cobertura mínima nos módulos críticos (cadastros)
+        run: >-
+          uv run coverage report --fail-under=90
+          --include="app/services/cadastro.py,app/repositories/cadastro.py,app/api/cadastros.py,app/schemas/cadastro.py"
       - run: uv run pip-audit
 
   frontend:

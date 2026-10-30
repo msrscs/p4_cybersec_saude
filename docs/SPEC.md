@@ -74,18 +74,18 @@ Tipo de OCI.
 
 **RF-09 Cadastro CID**
 CID de doenças.
-- [ ] Tabela: [cid] Campos: [cid_hash, cid, descricao]
-- [ ] CRUD
+- [x] Tabela: [cid] Campos: [cid_hash, cid, descricao]
+- [x] CRUD (exclusão lógica — ADR-0019)
 
 **RF-10 Cadastro Unidade de Saúde**
 Unidade de Sáude (Posto de Sáude, Clínica, Hospital, Laboratório).
-- [ ] Tabela: [unidade_saude] Campos: [id_unidade, tipo_unidade, nome, endereco, telefone]
-- [ ] CRUD
+- [x] Tabela: [unidade_saude] Campos: [id_unidade, tipo_unidade, nome, endereco, telefone]
+- [x] CRUD (exclusão lógica — ADR-0019)
 
 **RF-11 Cadastro Serviços de Saúde**
 Serviços (Consulta Ortopédia, Consulta Oncologista, Exame Sangue, Exame Mamografia).
-- [ ] Tabela: [servico_saude] Campos: [id_servico, nome, descricao]
-- [ ] CRUD
+- [x] Tabela: [servico_saude] Campos: [id_servico, nome, descricao]
+- [x] CRUD (exclusão lógica — ADR-0019)
 
 **RF-12 Cadastro OCI e Navegação**
 OCI, Navegação (Marcação dos serviçso de saúde).
