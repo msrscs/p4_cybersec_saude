@@ -53,12 +53,21 @@ class NovoUsuario:
     email: str
     senha: str = field(repr=False)
     id_unidade: int | None = None
+    troca_senha_obrigatoria: bool = False
 
 
 def cadastrar(
-    db: Session, settings: Settings, dados: NovoUsuario, ctx: ContextoRequisicao
+    db: Session,
+    settings: Settings,
+    dados: NovoUsuario,
+    ctx: ContextoRequisicao,
+    *,
+    autor: bytes | None = None,
 ) -> bytes:
-    """Cria o usuário e devolve seu cpf_hash."""
+    """Cria o usuário e devolve seu cpf_hash.
+
+    Sem `autor` (script administrativo), o evento fica em nome do próprio usuário criado.
+    """
     senha_mod.validar_politica(dados.senha, cpf=dados.cpf)
     cpf_hash = hash_busca(settings.chave_hmac, FinalidadeHash.CPF, dados.cpf)
     email_hash = hash_busca(settings.chave_hmac, FinalidadeHash.EMAIL, dados.email)
@@ -80,13 +89,20 @@ def cadastrar(
         kek_versao=dek_cifrada.kek_versao,
         senha_hash=senha_mod.gerar_hash(dados.senha, settings.bcrypt_rounds),
         id_unidade=dados.id_unidade,
+        troca_senha_obrigatoria=dados.troca_senha_obrigatoria,
     )
     try:
         with db.begin_nested():
             usuario_repo.inserir(db, usuario)
     except IntegrityError:
         raise ErroCadastro from None
-    auditoria.registrar(db, Evento.USER_CREATED, ctx, cpf_usuario_hash=cpf_hash)
+    auditoria.registrar(
+        db,
+        Evento.USER_CREATED,
+        ctx,
+        cpf_usuario_hash=autor or cpf_hash,
+        resumo=_alvo(cpf_hash) if autor else None,
+    )
     return cpf_hash
 
 
@@ -138,7 +154,13 @@ def gerar_senha_temporaria() -> str:
 
 
 def resetar_acesso(
-    db: Session, settings: Settings, cpf: str, ctx: ContextoRequisicao, agora: datetime
+    db: Session,
+    settings: Settings,
+    cpf: str,
+    ctx: ContextoRequisicao,
+    agora: datetime,
+    *,
+    autor: bytes | None = None,
 ) -> str:
     """Reset administrativo: senha temporária, MFA zerado, sessões e códigos revogados.
 
@@ -159,8 +181,18 @@ def resetar_acesso(
     usuario.bloqueado_ate = None
     codigo_repo.invalidar_todos(db, cpf_hash, agora)
     sessao_repo.remover_do_usuario(db, cpf_hash)
-    auditoria.registrar(db, Evento.ACCESS_RESET, ctx, cpf_usuario_hash=cpf_hash)
+    auditoria.registrar(
+        db,
+        Evento.ACCESS_RESET,
+        ctx,
+        cpf_usuario_hash=autor or cpf_hash,
+        resumo=_alvo(cpf_hash) if autor else None,
+    )
     return temporaria
+
+
+def _alvo(cpf_hash: bytes) -> dict[str, str]:
+    return {"usuario_alvo": cpf_hash.hex()[:12]}
 
 
 def cpf_em_claro(settings: Settings, usuario: Usuario) -> str:

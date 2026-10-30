@@ -1,7 +1,8 @@
 """Consulta do log de auditoria (RF-04, ADR-0015): somente leitura, e a leitura é auditada.
 
-O log guarda só hashes. O CPF exibido vem dos cadastros de usuário e paciente, decifrado na hora
-de responder (ADR-0016), e nunca é gravado no log. Hash sem cadastro (ex.: login com CPF que não
+O log guarda só hashes. Para quem tem log:ver_cpf (Administrador, ADR-0017), o CPF vem dos
+cadastros de usuário e paciente, decifrado na hora de responder (ADR-0016), e nunca é gravado no
+log; o Auditor vê só o hash truncado. Hash sem cadastro (ex.: login com CPF que não
 existe) continua aparecendo como hash truncado. A integridade exibida é a da última verificação
 feita pelo container `tarefas`; a API não recalcula a cadeia nem recebe a chave dos checkpoints
 (ADR-0010).
@@ -21,8 +22,9 @@ from app.models import Log
 from app.repositories import log as log_repo
 from app.repositories import paciente as paciente_repo
 from app.repositories import usuario as usuario_repo
-from app.services import auditoria, paciente, usuario
+from app.services import auditoria, autorizacao, paciente, usuario
 from app.services.auditoria import ContextoRequisicao, Evento
+from app.services.autorizacao import Permissao
 
 TAMANHO_PAGINA = 50  # fixo: o cliente não escolhe quantos registros ler por requisição
 _TAMANHO_HASH = 12
@@ -89,8 +91,9 @@ def consultar(
         cpf_usuario_hash=cpf_hash,
     )
     pagina = linhas[:TAMANHO_PAGINA]
-    cpfs_usuarios = _cpfs_de_usuarios(db, settings, pagina)
-    cpfs_pacientes = _cpfs_de_pacientes(db, settings, pagina)
+    revelar = autorizacao.tem_permissao(db, autor, Permissao.LOG_VER_CPF)
+    cpfs_usuarios = _cpfs_de_usuarios(db, settings, pagina) if revelar else {}
+    cpfs_pacientes = _cpfs_de_pacientes(db, settings, pagina) if revelar else {}
     resumo = _resumo_da_leitura(filtros, cpf_hash, pagina)
     resumo["cpfs_exibidos"] = len(cpfs_usuarios) + len(cpfs_pacientes)
     auditoria.registrar(db, Evento.LOG_READ, ctx, cpf_usuario_hash=autor, resumo=resumo)

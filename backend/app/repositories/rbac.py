@@ -1,8 +1,12 @@
-from sqlalchemy import delete, select
+from collections.abc import Iterable
+
+from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from app.models import Grupo, GrupoPapel, Papel, PapelPermissao, Permissao, UsuarioGrupo
+from app.models import Grupo, GrupoPapel, Papel, PapelPermissao, Permissao, Usuario, UsuarioGrupo
+
+_TRAVA_ADMINISTRADORES = 7300001  # chave própria do pg_advisory_xact_lock
 
 
 def permissoes(db: Session, cpf_hash: bytes) -> frozenset[str]:
@@ -31,6 +35,48 @@ def buscar_grupo(db: Session, nome: str) -> Grupo | None:
 
 def nomes_dos_grupos(db: Session) -> list[str]:
     return list(db.scalars(select(Grupo.grupo).order_by(Grupo.id_grupo)))
+
+
+def grupos_dos_usuarios(db: Session, cpf_hashes: Iterable[bytes]) -> dict[bytes, list[str]]:
+    consulta = (
+        select(UsuarioGrupo.fk_usuario_cpf_hash, Grupo.grupo)
+        .join(Grupo, Grupo.id_grupo == UsuarioGrupo.fk_grupo_id_grupo)
+        .where(UsuarioGrupo.fk_usuario_cpf_hash.in_(list(cpf_hashes)))
+        .order_by(Grupo.id_grupo)
+    )
+    grupos: dict[bytes, list[str]] = {}
+    for cpf_hash, nome in db.execute(consulta):
+        grupos.setdefault(cpf_hash, []).append(nome)
+    return grupos
+
+
+def travar_administradores(db: Session) -> None:
+    """Trava até o fim da transação (a app_user não tem UPDATE em grupo para um FOR UPDATE)."""
+    db.execute(select(func.pg_advisory_xact_lock(_TRAVA_ADMINISTRADORES)))
+
+
+def esta_no_grupo(db: Session, cpf_hash: bytes, nome_grupo: str) -> bool:
+    consulta = (
+        select(UsuarioGrupo.fk_grupo_id_grupo)
+        .join(Grupo, Grupo.id_grupo == UsuarioGrupo.fk_grupo_id_grupo)
+        .where(UsuarioGrupo.fk_usuario_cpf_hash == cpf_hash, Grupo.grupo == nome_grupo)
+    )
+    return db.scalars(consulta.limit(1)).first() is not None
+
+
+def outros_ativos_no_grupo(db: Session, cpf_hash: bytes, nome_grupo: str) -> int:
+    consulta = (
+        select(func.count())
+        .select_from(UsuarioGrupo)
+        .join(Grupo, Grupo.id_grupo == UsuarioGrupo.fk_grupo_id_grupo)
+        .join(Usuario, Usuario.cpf_hash == UsuarioGrupo.fk_usuario_cpf_hash)
+        .where(
+            Grupo.grupo == nome_grupo,
+            Usuario.status == "ativo",
+            Usuario.cpf_hash != cpf_hash,
+        )
+    )
+    return int(db.scalar(consulta) or 0)
 
 
 def adicionar_ao_grupo(db: Session, cpf_hash: bytes, id_grupo: int) -> bool:

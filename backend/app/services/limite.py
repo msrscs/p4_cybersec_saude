@@ -41,6 +41,9 @@ LISTA_PACIENTE = (
     Limite("lista_paciente", 300, timedelta(hours=1)),
 )
 CONSULTA_LOG = (Limite("consulta_log", 60, timedelta(minutes=1)),)
+LISTA_USUARIO = (Limite("lista_usuario", 30, timedelta(minutes=1)),)
+# Criar e resetar geram hash bcrypt: caros de propósito.
+ACESSO_USUARIO = (Limite("acesso_usuario", 20, timedelta(minutes=1)),)
 GERAL = (Limite("geral", 300, timedelta(minutes=1)),)
 
 

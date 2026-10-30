@@ -33,7 +33,7 @@ class LogItem(BaseModel):
     request_id: str | None
     usuario: str | None  # hash truncado: existe mesmo quando o CPF não tem cadastro
     paciente: str | None
-    usuario_cpf: str | None = Field(repr=False)  # decifrado do cadastro, nunca gravado no log
+    usuario_cpf: str | None = Field(repr=False)  # só com log:ver_cpf; nunca gravado no log
     paciente_cpf: str | None = Field(repr=False)
     hash: str
     resumo: dict[str, Any]

@@ -17,6 +17,9 @@ class Usuario(Base):
     __tablename__ = "usuario"
 
     cpf_hash: Mapped[bytes] = mapped_column(BYTEA, primary_key=True)
+    id_publico: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), unique=True, default=uuid.uuid4
+    )
     email_hash: Mapped[bytes] = mapped_column(BYTEA, unique=True)
     cpf_cripto: Mapped[bytes] = mapped_column(BYTEA)
     nome_cripto: Mapped[bytes] = mapped_column(BYTEA)

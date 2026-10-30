@@ -247,6 +247,7 @@ ESPERADO = {
 }
 # Só acesso global: os demais têm visão restrita pela SPEC, sem recorte por unidade ainda.
 PODEM_LISTAR = {"Administrador", "Gestor"}
+USUARIO_ACOES = ("ler", "criar", "editar", "inativar", "resetar", "grupos")
 
 
 @pytest.mark.parametrize("perfil", PERFIS)
@@ -275,6 +276,8 @@ def test_permissoes_por_perfil(
     esperadas = [n for n, ok in zip(nomes, ESPERADO[perfil], strict=True) if ok]
     extras = ["paciente:listar"] if listar else []
     extras += ["log:ler"] if perfil in ("Administrador", "Auditor") else []
+    if perfil == "Administrador":
+        extras += ["log:ver_cpf", *(f"usuario:{a}" for a in USUARIO_ACOES)]
     assert permissoes == sorted([*esperadas, *extras])
 
 

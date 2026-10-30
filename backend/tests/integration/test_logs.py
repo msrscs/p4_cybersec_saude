@@ -87,6 +87,18 @@ def test_item_mostra_cpfs_decifrados_e_nenhum_outro_dado_pessoal(
     assert "Severina" not in resp.text and "exemplo.com.br" not in resp.text
 
 
+def test_auditor_ve_so_o_hash_e_nenhum_cpf(logar: Logar) -> None:  # noqa: F811
+    admin, auditor = logar("Administrador"), logar("Auditor")
+    dados = _novo()
+    admin.api.post("/pacientes", json=dados)
+    resp = auditor.api.post("/logs/consulta", json={"acao": "patient_created"})
+    item = resp.json()["itens"][0]
+    assert item["usuario_cpf"] is None and item["paciente_cpf"] is None
+    assert len(item["usuario"]) == len(item["paciente"]) == 12
+    assert str(dados["cpf"]) not in resp.text and formatar_cpf(admin.cpf) not in resp.text
+    assert "log:ver_cpf" not in auditor.api.get("/auth/sessao").json()["permissoes"]
+
+
 def test_cpf_sem_cadastro_continua_como_hash(
     logar: Logar,  # noqa: F811
     fabrica_sessao: Fabrica,
@@ -106,7 +118,7 @@ def test_cadastro_adulterado_nao_derruba_a_auditoria(
     logar: Logar,  # noqa: F811
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    logado = logar("Auditor")
+    logado = logar("Administrador")
 
     def falha(*_a: object) -> str:
         raise ErroCriptografia("Falha ao decifrar dado.")
@@ -120,7 +132,7 @@ def test_cpf_exibido_nao_e_gravado_no_log(
     logar: Logar,  # noqa: F811
     fabrica_sessao: Fabrica,
 ) -> None:
-    logado = logar("Auditor")
+    logado = logar("Administrador")
     _consulta(logado.api)
     with fabrica_sessao() as db:
         evento = db.scalars(
@@ -227,7 +239,7 @@ def test_leitura_e_auditada_sem_cpf_em_claro(
     resumo = evento.resumo_acessado
     assert resumo["registros"] == 1 and resumo["acao"] == "login_success"
     assert resumo["usuario"] == hash_busca(chave, FinalidadeHash.CPF, alvo.cpf).hex()[:12]
-    assert resumo["cpfs_exibidos"] == 1
+    assert resumo["cpfs_exibidos"] == 0  # o Auditor só vê hash
     assert alvo.cpf not in str(resumo) and formatar_cpf(alvo.cpf) not in str(resumo)
 
 

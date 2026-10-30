@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from app.api import auth, health, logs, mfa, pacientes
+from app.api import auth, health, logs, mfa, pacientes, usuarios
 from app.core.config import Settings, get_settings
 from app.core.database import criar_engine, criar_sessionmaker
 from app.core.errors import register_error_handlers
@@ -28,4 +28,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(mfa.router)
     app.include_router(pacientes.router)
     app.include_router(logs.router)
+    app.include_router(usuarios.router)
     return app
