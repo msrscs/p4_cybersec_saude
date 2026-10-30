@@ -17,6 +17,10 @@ export function corpoDoFormulario(campos, valores, editando) {
       corpo[campo.nome] = (valores[campo.nome] ?? []).map(Number);
       continue;
     }
+    if (campo.selecaoPorBusca) {
+      corpo[campo.nome] = valores[campo.nome] ?? [];
+      continue;
+    }
     const valor = (valores[campo.nome] ?? '').trim();
     if (valor === '' && campo.opcional) corpo[campo.nome] = campo.vazio;
     else corpo[campo.nome] = campo.numerico ? Number(valor) : valor;
@@ -27,7 +31,7 @@ export function corpoDoFormulario(campos, valores, editando) {
 /** Primeira mensagem de erro de preenchimento, ou null se está tudo certo. */
 export function erroDoFormulario(campos, valores, editando) {
   for (const campo of campos) {
-    if ((editando && campo.soNaCriacao) || campo.multipla) continue;
+    if ((editando && campo.soNaCriacao) || campo.multipla || campo.selecaoPorBusca) continue;
     const valor = (valores[campo.nome] ?? '').trim();
     if (valor === '' && !campo.opcional) return `Preencha: ${campo.rotulo}.`;
     if (valor !== '' && campo.padrao && !campo.padrao.test(valor)) return campo.mensagem;
@@ -62,6 +66,17 @@ export function opcoesMultiplas(ativas, atuais, sufixoInativo) {
         marcado: true,
       })),
   ];
+}
+
+/** Resumo para a coluna da lista: uma lista longa de códigos não pode tomar a tabela. */
+export function resumoDeCodigos(codigos, limite = 6) {
+  if (codigos.length === 0) return '—';
+  const visiveis = codigos.slice(0, limite).join(', ');
+  return codigos.length > limite ? `${visiveis} e mais ${codigos.length - limite}` : visiveis;
+}
+
+export function rotuloDeCid({ cid, descricao, status }) {
+  return `${cid} — ${descricao}${status === 'inativo' ? ' (inativo)' : ''}`;
 }
 
 export function opcoesDeUnidade(ativas, atualId, atualNome) {

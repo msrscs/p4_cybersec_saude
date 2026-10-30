@@ -441,7 +441,13 @@ async function iniciar() {
     aoAbrir['secao-usuarios'] = criarUsuarios(chamarApi, permissoes).abrir;
   }
   const temCadastros = permissoes.has('cadastro:ler');
-  for (const id of ['menu-tipos-unidade', 'menu-unidades', 'menu-servicos', 'menu-cids'])
+  for (const id of [
+    'menu-tipos-unidade',
+    'menu-unidades',
+    'menu-servicos',
+    'menu-cids',
+    'menu-tipos-oci',
+  ])
     $(id).hidden = !temCadastros;
   if (temCadastros) {
     const podeGerenciar = permissoes.has('cadastro:gerenciar');

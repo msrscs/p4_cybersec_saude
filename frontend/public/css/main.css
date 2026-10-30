@@ -1254,3 +1254,32 @@ form.ficha + .tabela {
   outline: 2px solid var(--focus);
   outline-offset: 1px;
 }
+
+/* Seleção por busca */
+.seletor__lista {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.seletor__item {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+
+.seletor__item .link {
+  flex: none;
+}
+
+.seletor__titulo {
+  margin: 14px 0 0;
+  font-weight: 600;
+}

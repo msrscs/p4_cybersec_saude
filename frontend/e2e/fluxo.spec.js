@@ -342,6 +342,40 @@ test('cadastros: unidade, serviço e CID, com busca, edição, duplicado e inati
   await page.getByRole('button', { name: 'Salvar CID' }).click();
   await expect(cid).toContainText('Neoplasia maligna da mama');
 
+  // Tipo de OCI: o CID é escolhido por busca, e o CID em uso não pode ser inativado.
+  await page.getByRole('button', { name: 'Tipos de OCI' }).click();
+  await expect(page.getByRole('heading', { name: 'Tipos de OCI' })).toBeVisible();
+  await page.getByRole('button', { name: 'Novo tipo de OCI' }).click();
+  await page.getByLabel('Nome da OCI').fill('OCI Oncologia');
+  await page.getByLabel('Prazo para diagnóstico (dias)').fill('trinta');
+  await page.getByRole('button', { name: 'Salvar tipo de OCI' }).click();
+  await expect(page.locator('#secao-tipos-oci form.ficha > .form__status')).toHaveText(
+    'Informe o prazo em dias, de 1 a 3650.',
+  );
+  await page.getByLabel('Prazo para diagnóstico (dias)').fill('30');
+  await page.getByLabel('Buscar CID por código ou descrição').fill('mama');
+  await page.locator('#secao-tipos-oci').getByRole('button', { name: 'Procurar' }).click();
+  await page.getByRole('button', { name: 'Incluir C50.9' }).click();
+  await expect(page.getByRole('button', { name: 'Remover C50.9' })).toBeVisible();
+  await page.getByRole('button', { name: 'Salvar tipo de OCI' }).click();
+  const oci = page.locator('#secao-tipos-oci tbody tr', { hasText: 'OCI Oncologia' });
+  await expect(oci).toContainText('C50.9');
+  await expect(oci).toContainText('30');
+
+  await oci.getByRole('button', { name: /^Editar/ }).click();
+  await expect(page.getByRole('button', { name: 'Remover C50.9' })).toBeVisible();
+  await page
+    .locator('#secao-tipos-oci form.ficha')
+    .getByRole('button', { name: 'Cancelar' })
+    .click();
+
+  await page.getByRole('button', { name: 'CID', exact: true }).click();
+  await cid.getByRole('button', { name: /^Inativar/ }).click();
+  await expect(page.locator('#secao-cids > .form__status')).toHaveText(
+    'Há tipos de OCI ativos com este CID: remova-o deles antes de inativar.',
+  );
+  await expect(cid.locator('.selo')).toHaveText('Ativo');
+
   await page.getByLabel('Buscar em CID').fill('nada-disso');
   await page.locator('#secao-cids').getByRole('button', { name: 'Buscar' }).click();
   await expect(page.locator('#secao-cids tbody tr')).toHaveCount(0);
@@ -464,6 +498,7 @@ test('no celular a página não tem rolagem lateral, em nenhuma seção', async 
     'Unidades',
     'Serviços',
     'CID',
+    'Tipos de OCI',
     'Auditoria',
     'Pacientes',
     'Minha conta',

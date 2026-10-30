@@ -12,6 +12,8 @@ import {
   opcoesDeUnidade,
   opcoesMultiplas,
   PADRAO_CID,
+  resumoDeCodigos,
+  rotuloDeCid,
 } from '../public/js/lib/cadastros.js';
 import { cpfValido, formatarCpf, somenteDigitos } from '../public/js/lib/cpf.js';
 import {
@@ -107,6 +109,26 @@ describe('cadastros', () => {
         { valor: '2', rotulo: 'B', marcado: true },
         { valor: '9', rotulo: 'Antigo (inativo)', marcado: true },
       ],
+    );
+  });
+
+  it('seleção por busca vai como veio e não é obrigatória', () => {
+    const campo = [{ nome: 'cids', rotulo: 'CIDs', selecaoPorBusca: true }];
+    assert.deepEqual(corpoDoFormulario(campo, { cids: ['abc'] }, true), { cids: ['abc'] });
+    assert.equal(erroDoFormulario(campo, { cids: [] }, false), null);
+  });
+
+  it('resume códigos longos na coluna da lista', () => {
+    assert.equal(resumoDeCodigos([]), '—');
+    assert.equal(resumoDeCodigos(['A00', 'A01']), 'A00, A01');
+    assert.equal(resumoDeCodigos(['A', 'B', 'C'], 2), 'A, B e mais 1');
+  });
+
+  it('rótulo de CID marca o inativo', () => {
+    assert.equal(rotuloDeCid({ cid: 'C50', descricao: 'Mama', status: 'ativo' }), 'C50 — Mama');
+    assert.equal(
+      rotuloDeCid({ cid: 'C50', descricao: 'Mama', status: 'inativo' }),
+      'C50 — Mama (inativo)',
     );
   });
 

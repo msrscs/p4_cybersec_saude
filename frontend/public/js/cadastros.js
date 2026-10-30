@@ -7,13 +7,50 @@ import {
   opcoesAtivas,
   opcoesMultiplas,
   PADRAO_CID,
+  resumoDeCodigos,
+  rotuloDeCid,
 } from './lib/cadastros.js';
 import { definirStatus, el } from './lib/dom.js';
+import { criarSeletor } from './seletor.js';
 
 const $ = (id) => document.getElementById(id);
 const ROTULO_STATUS = { ativo: 'Ativo', inativo: 'Inativo' };
 
 export const CATALOGOS = {
+  tiposOci: {
+    secao: 'secao-tipos-oci',
+    rota: '/tipos-oci',
+    titulo: 'Tipos de OCI',
+    singular: 'tipo de OCI',
+    novo: 'Novo tipo de OCI',
+    identificacao: (item) => item.tipo_oci,
+    campos: [
+      { nome: 'tipo_oci', rotulo: 'Nome da OCI', max: 150 },
+      {
+        nome: 'prazo_diagnostico',
+        rotulo: 'Prazo para diagnóstico (dias)',
+        max: 4,
+        numerico: true,
+        padrao: /^[1-9][0-9]{0,3}$/,
+        mensagem: 'Informe o prazo em dias, de 1 a 3650.',
+      },
+      {
+        nome: 'cids',
+        rotulo: 'CIDs deste tipo de OCI',
+        rotuloBusca: 'Buscar CID por código ou descrição',
+        selecaoPorBusca: true,
+        buscaEm: '/cids/opcoes',
+        rotuloItem: rotuloDeCid,
+        codigoItem: (item) => item.cid,
+        vazioSelecao: 'Nenhum CID selecionado.',
+      },
+    ],
+    colunas: [
+      { titulo: 'Nome', valor: (item) => item.tipo_oci },
+      { titulo: 'Prazo (dias)', valor: (item) => String(item.prazo_diagnostico) },
+      { titulo: 'CIDs', valor: (item) => resumoDeCodigos(item.cids.map(({ cid }) => cid)) },
+    ],
+  },
   tiposUnidade: {
     secao: 'secao-tipos-unidade',
     rota: '/tipos-unidade',
@@ -165,10 +202,19 @@ export function criarCadastro(chamarApi, catalogo, podeGerenciar) {
   let pagina = 1;
   let termo = '';
   let editando = null;
+  const seletores = new Map(
+    catalogo.campos
+      .filter((campo) => campo.selecaoPorBusca)
+      .map((campo) => [campo.nome, criarSeletor(chamarApi, campo, idCampo(campo))]),
+  );
 
   function valoresDoForm() {
     const valores = {};
     for (const campo of catalogo.campos) {
+      if (campo.selecaoPorBusca) {
+        valores[campo.nome] = seletores.get(campo.nome).valores();
+        continue;
+      }
       const controle = $(idCampo(campo));
       valores[campo.nome] = campo.multipla
         ? [...controle.querySelectorAll('input:checked')].map((caixa) => caixa.value)
@@ -230,6 +276,10 @@ export function criarCadastro(chamarApi, catalogo, podeGerenciar) {
     form.reset();
     tituloForm.textContent = item ? `Editar ${catalogo.singular}` : catalogo.novo;
     for (const campo of catalogo.campos) {
+      if (campo.selecaoPorBusca) {
+        seletores.get(campo.nome).definir(item?.[campo.nome] ?? []);
+        continue;
+      }
       if (campo.multipla) continue;
       const controle = $(idCampo(campo));
       if (item) controle.value = item[campo.nome] ?? '';
@@ -244,19 +294,21 @@ export function criarCadastro(chamarApi, catalogo, podeGerenciar) {
   form.append(
     tituloForm,
     ...catalogo.campos.map((campo) =>
-      campo.multipla
-        ? el(
-            'fieldset',
-            { class: 'grupos' },
-            el('legend', {}, campo.rotulo),
-            controleDoCampo(campo, idCampo(campo)),
-          )
-        : el(
-            'div',
-            { class: 'field' },
-            el('label', { for: idCampo(campo) }, campo.rotulo),
-            controleDoCampo(campo, idCampo(campo)),
-          ),
+      campo.selecaoPorBusca
+        ? seletores.get(campo.nome).elemento
+        : campo.multipla
+          ? el(
+              'fieldset',
+              { class: 'grupos' },
+              el('legend', {}, campo.rotulo),
+              controleDoCampo(campo, idCampo(campo)),
+            )
+          : el(
+              'div',
+              { class: 'field' },
+              el('label', { for: idCampo(campo) }, campo.rotulo),
+              controleDoCampo(campo, idCampo(campo)),
+            ),
     ),
     statusForm,
     el(
