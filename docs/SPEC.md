@@ -69,8 +69,8 @@ Grupos de Usuários.
 
 **RF-08 Cadastro Tipo de OCI**
 Tipo de OCI.
-- [ ] Tabela: [tipo_oci] Campos: [id_tipo_oci, tipo_oci, prazo_dignostico]
-- [ ] CRUD
+- [x] Tabela: [tipo_oci] Campos: [id_tipo_oci, tipo_oci, prazo_diagnostico (em dias)]
+- [x] CRUD (exclusão lógica — ADR-0024)
 
 **RF-09 Cadastro CID**
 CID de doenças.
@@ -100,7 +100,7 @@ Relacionamentos.
 - [ ] Tabela: [grupo_papel] Campos: [fk_grupo_id_grupo, fk_papel_id_papel]
 - [ ] Tabela: [usuario_grupo] Campos: [fk_usuario_cpf_hash, fk_grupo_id_grupo]
 - [ ] Tabela: [log_oci] Campos: [fk_log_id_log, fk_oci_id_oci]
-- [ ] Tabela: [tipo_oci_cid] Campos: [fk_tipo_oci_tipo_oci_id, fk_cid_cid_hash]
+- [x] Tabela: [tipo_oci_cid] Campos: [fk_tipo_oci_tipo_oci_id, fk_cid_cid_hash]
 - [x] Tabela: [unidade_saude_servico_saude] Campos: [fk_unidade_saude_id_unidade, fk_servico_saude_id_servico]
 - [ ] Tabela: [cid_servico_saude] Campos: [fk_cid_cid_hash, fk_servico_saude_id_servico]
 
