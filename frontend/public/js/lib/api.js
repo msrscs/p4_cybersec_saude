@@ -26,6 +26,14 @@ export class ErroApi extends Error {
 }
 
 let aoExpirar = null;
+// Token CSRF da sessão (ADR-0013): só em memória, vem de GET /auth/sessao.
+let tokenCsrf = null;
+
+export function cabecalhos(metodo, temCorpo, csrf) {
+  const headers = temCorpo ? { 'Content-Type': 'application/json' } : {};
+  if (metodo !== 'GET' && csrf) headers['X-CSRF-Token'] = csrf;
+  return headers;
+}
 
 /** Define o que fazer quando a sessão cai (401 em rota protegida). */
 export function quandoSessaoExpirar(callback) {
@@ -43,7 +51,7 @@ export async function chamar(metodo, caminho, corpo, { sessao = false } = {}) {
       method: metodo,
       credentials: 'same-origin',
       cache: 'no-store',
-      headers: corpo === undefined ? {} : { 'Content-Type': 'application/json' },
+      headers: cabecalhos(metodo, corpo !== undefined, tokenCsrf),
       body: corpo === undefined ? undefined : JSON.stringify(corpo),
     });
   } catch {
@@ -53,5 +61,6 @@ export async function chamar(metodo, caminho, corpo, { sessao = false } = {}) {
   const dados = tipo.includes('application/json') ? await resposta.json() : null;
   if (resposta.status === 401 && sessao && aoExpirar) aoExpirar();
   if (!resposta.ok) throw new ErroApi(resposta.status, dados);
+  if (typeof dados?.csrf_token === 'string') tokenCsrf = dados.csrf_token;
   return dados;
 }

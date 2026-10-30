@@ -3,7 +3,7 @@ import http from 'node:http';
 import { after, before, beforeEach, describe, it } from 'node:test';
 
 import { createApp } from '../src/app.js';
-import { reescreverCookie } from '../src/proxy.js';
+import { ipDoCliente, reescreverCookie } from '../src/proxy.js';
 
 const UUID = '6f1c2a8e-1f0b-4c55-9d1e-2b4b9b6b7c11';
 
@@ -61,7 +61,7 @@ describe('repasse /api para o backend', () => {
   it('repassa método, caminho, corpo JSON e cookies', async () => {
     const res = await fetch(`${baseUrl}/api/auth/login`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', cookie: '__Host-sessao=abc' },
+      headers: { 'content-type': 'application/json', cookie: '__Host-sessao=abc', origin: baseUrl },
       body: '{"cpf":"1"}',
     });
     assert.equal(res.status, 200);
@@ -97,7 +97,10 @@ describe('repasse /api para o backend', () => {
     ['POST', '/auth/mfa/verificar'],
   ]) {
     it(`permite ${metodo} ${caminho}`, async () => {
-      const res = await fetch(`${baseUrl}/api${caminho}`, { method: metodo });
+      const res = await fetch(`${baseUrl}/api${caminho}`, {
+        method: metodo,
+        headers: { origin: baseUrl },
+      });
       assert.equal(res.status, 200);
       assert.equal(recebido.url, caminho);
     });
@@ -129,7 +132,7 @@ describe('repasse /api para o backend', () => {
   it('recusa corpo que não é JSON', async () => {
     const res = await fetch(`${baseUrl}/api/auth/login`, {
       method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      headers: { 'content-type': 'application/x-www-form-urlencoded', origin: baseUrl },
       body: 'cpf=1',
     });
     assert.equal(res.status, 415);
@@ -139,7 +142,7 @@ describe('repasse /api para o backend', () => {
   it('recusa corpo acima do limite', async () => {
     const res = await fetch(`${baseUrl}/api/auth/login`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', origin: baseUrl },
       body: JSON.stringify({ x: 'a'.repeat(70 * 1024) }),
     });
     assert.equal(res.status, 413);
@@ -152,11 +155,60 @@ describe('repasse /api para o backend', () => {
       'pre_auth=t; HttpOnly; Max-Age=300; Path=/auth/mfa; SameSite=strict; Secure',
       '__Host-sessao=s; HttpOnly; Path=/; SameSite=strict; Secure',
     ];
-    const res = await fetch(`${baseUrl}/api/auth/login`, { method: 'POST' });
+    const res = await fetch(`${baseUrl}/api/auth/login`, {
+      method: 'POST',
+      headers: { origin: baseUrl },
+    });
     assert.deepEqual(res.headers.getSetCookie(), [
       'pre_auth=t; HttpOnly; Max-Age=300; Path=/api/auth/mfa; SameSite=strict; Secure',
       '__Host-sessao=s; HttpOnly; Path=/; SameSite=strict; Secure',
     ]);
+  });
+
+  for (const [nome, headers] of [
+    ['sem Origin nem Sec-Fetch-Site', {}],
+    ['Origin de outro site', { origin: 'https://evil.example' }],
+    ['Origin malformado', { origin: 'null' }],
+    ['Sec-Fetch-Site cross-site', { 'sec-fetch-site': 'cross-site' }],
+    ['Sec-Fetch-Site same-site', { 'sec-fetch-site': 'same-site' }],
+  ]) {
+    it(`CSRF: recusa POST com ${nome} sem chegar ao backend`, async () => {
+      const res = await fetch(`${baseUrl}/api/auth/login`, { method: 'POST', headers });
+      assert.equal(res.status, 403);
+      assert.deepEqual(await res.json(), { detail: 'Requisição recusada.' });
+      assert.equal(recebido, null);
+    });
+  }
+
+  it('CSRF: aceita Sec-Fetch-Site same-origin sem Origin', async () => {
+    const res = await fetch(`${baseUrl}/api/auth/logout`, {
+      method: 'POST',
+      headers: { 'sec-fetch-site': 'same-origin' },
+    });
+    assert.equal(res.status, 200);
+  });
+
+  it('CSRF: Sec-Fetch-Site same-origin não salva Origin de outro site', async () => {
+    const res = await fetch(`${baseUrl}/api/auth/logout`, {
+      method: 'POST',
+      headers: { 'sec-fetch-site': 'same-origin', origin: 'https://evil.example' },
+    });
+    assert.equal(res.status, 403);
+  });
+
+  it('repassa X-CSRF-Token ao backend e Retry-After ao navegador', async () => {
+    resposta = {
+      status: 429,
+      headers: { 'content-type': 'application/json', 'retry-after': '42' },
+      corpo: '{"detail":"x"}',
+    };
+    const res = await fetch(`${baseUrl}/api/pacientes`, {
+      method: 'POST',
+      headers: { origin: baseUrl, 'x-csrf-token': 'tok' },
+    });
+    assert.equal(recebido.headers['x-csrf-token'], 'tok');
+    assert.equal(res.status, 429);
+    assert.equal(res.headers.get('retry-after'), '42');
   });
 
   it('respostas sem Cache-Control ganham no-store', async () => {
@@ -201,6 +253,29 @@ describe('repasse com backend fora do ar', () => {
     } finally {
       await new Promise((resolve) => app.close(resolve));
     }
+  });
+});
+
+describe('ipDoCliente', () => {
+  const req = (ip, xff) => ({
+    socket: { remoteAddress: ip },
+    headers: xff === undefined ? {} : { 'x-forwarded-for': xff },
+  });
+
+  it('sem proxy configurado, vale a conexão', () => {
+    assert.equal(ipDoCliente(req('::ffff:10.0.0.9', '1.2.3.4')), '10.0.0.9');
+  });
+
+  it('só aceita X-Forwarded-For vindo do proxy configurado', () => {
+    assert.equal(ipDoCliente(req('10.0.0.1', '1.2.3.4'), '10.0.0.1'), '1.2.3.4');
+    assert.equal(ipDoCliente(req('::ffff:10.0.0.1', '2001:db8::1'), '10.0.0.1'), '2001:db8::1');
+    assert.equal(ipDoCliente(req('10.0.0.9', '1.2.3.4'), '10.0.0.1'), '10.0.0.9');
+  });
+
+  it('valor inválido do proxy cai no IP da conexão', () => {
+    assert.equal(ipDoCliente(req('10.0.0.1', '1.2.3.4, 5.6.7.8'), '10.0.0.1'), '10.0.0.1');
+    assert.equal(ipDoCliente(req('10.0.0.1', 'lixo'), '10.0.0.1'), '10.0.0.1');
+    assert.equal(ipDoCliente(req('10.0.0.1'), '10.0.0.1'), '10.0.0.1');
   });
 });
 

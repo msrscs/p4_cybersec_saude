@@ -8,7 +8,12 @@ import { createApiProxy } from './proxy.js';
 
 const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 
-export function createApp({ apiUrl = 'http://127.0.0.1:8000', apiTimeoutMs } = {}) {
+export function createApp({
+  apiUrl = 'http://127.0.0.1:8000',
+  apiTimeoutMs,
+  proxyConfiavel,
+  https = false,
+} = {}) {
   const app = express();
   app.disable('x-powered-by');
 
@@ -30,14 +35,22 @@ export function createApp({ apiUrl = 'http://127.0.0.1:8000', apiTimeoutMs } = {
           // Trusted Types: o navegador recusa atribuir texto a innerHTML e afins (I6).
           requireTrustedTypesFor: ["'script'"],
           trustedTypes: ["'none'"],
+          // Só com TLS: em http://localhost (dev) quebraria as chamadas da própria página.
+          ...(https ? { upgradeInsecureRequests: [] } : {}),
         },
       },
       strictTransportSecurity: { maxAge: 63072000, includeSubDomains: true, preload: true },
       referrerPolicy: { policy: 'no-referrer' },
+      xFrameOptions: { action: 'deny' },
+      crossOriginOpenerPolicy: { policy: 'same-origin' },
+      crossOriginResourcePolicy: { policy: 'same-origin' },
     }),
   );
   app.use((_req, res, next) => {
-    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    res.setHeader(
+      'Permissions-Policy',
+      'camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), bluetooth=()',
+    );
     next();
   });
 
@@ -45,7 +58,7 @@ export function createApp({ apiUrl = 'http://127.0.0.1:8000', apiTimeoutMs } = {
     res.json({ status: 'ok' });
   });
 
-  app.use('/api', createApiProxy({ apiUrl, timeoutMs: apiTimeoutMs }));
+  app.use('/api', createApiProxy({ apiUrl, timeoutMs: apiTimeoutMs, proxyConfiavel }));
 
   app.use(
     express.static(publicDir, {

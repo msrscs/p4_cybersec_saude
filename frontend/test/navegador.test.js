@@ -2,8 +2,23 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { MENSAGENS, mensagemDeErro } from '../public/js/lib/api.js';
+import { cabecalhos, MENSAGENS, mensagemDeErro } from '../public/js/lib/api.js';
 import { cpfValido, formatarCpf, somenteDigitos } from '../public/js/lib/cpf.js';
+
+describe('cabeçalhos da chamada à API', () => {
+  it('envia o token CSRF só em métodos que alteram dados', () => {
+    assert.deepEqual(cabecalhos('GET', false, 'tok'), {});
+    assert.deepEqual(cabecalhos('POST', false, 'tok'), { 'X-CSRF-Token': 'tok' });
+    assert.deepEqual(cabecalhos('PATCH', true, 'tok'), {
+      'Content-Type': 'application/json',
+      'X-CSRF-Token': 'tok',
+    });
+  });
+
+  it('antes da sessão completa não há token a enviar', () => {
+    assert.deepEqual(cabecalhos('POST', true, null), { 'Content-Type': 'application/json' });
+  });
+});
 
 describe('cpf', () => {
   it('formata enquanto digita', () => {

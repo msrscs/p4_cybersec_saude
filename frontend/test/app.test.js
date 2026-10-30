@@ -33,6 +33,26 @@ describe('frontend', () => {
     assert.equal(res.headers.get('x-content-type-options'), 'nosniff');
     assert.equal(res.headers.get('referrer-policy'), 'no-referrer');
     assert.equal(res.headers.get('x-powered-by'), null);
+    assert.equal(res.headers.get('x-frame-options'), 'DENY');
+    assert.equal(res.headers.get('cross-origin-opener-policy'), 'same-origin');
+    assert.equal(res.headers.get('cross-origin-resource-policy'), 'same-origin');
+    assert.equal(res.headers.get('origin-agent-cluster'), '?1');
+    assert.match(res.headers.get('permissions-policy'), /camera=\(\).*payment=\(\).*usb=\(\)/);
+  });
+
+  it('upgrade-insecure-requests só com HTTPS', async () => {
+    assert.doesNotMatch(
+      (await fetch(`${baseUrl}/`)).headers.get('content-security-policy'),
+      /upgrade-insecure-requests/,
+    );
+    const seguro = createApp({ https: true }).listen(0, '127.0.0.1');
+    await new Promise((resolve) => seguro.once('listening', resolve));
+    try {
+      const res = await fetch(`http://127.0.0.1:${seguro.address().port}/`);
+      assert.match(res.headers.get('content-security-policy'), /upgrade-insecure-requests/);
+    } finally {
+      await new Promise((resolve) => seguro.close(resolve));
+    }
   });
 
   for (const pagina of ['/', '/painel', '/recuperar']) {
