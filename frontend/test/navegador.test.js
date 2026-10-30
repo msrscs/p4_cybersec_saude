@@ -10,6 +10,7 @@ import {
   formatarTelefone,
   opcoesAtivas,
   opcoesDeUnidade,
+  opcoesMultiplas,
   PADRAO_CID,
 } from '../public/js/lib/cadastros.js';
 import { cpfValido, formatarCpf, somenteDigitos } from '../public/js/lib/cpf.js';
@@ -77,6 +78,36 @@ describe('cadastros', () => {
     assert.deepEqual(opcoesAtivas([], 7, 'Antigo', '(inativo)'), [
       { valor: '7', rotulo: 'Antigo (inativo)' },
     ]);
+  });
+
+  it('campo múltiplo vai como lista de números e não é obrigatório', () => {
+    const multipla = [{ nome: 'servicos', rotulo: 'Serviços', multipla: true }];
+    assert.deepEqual(corpoDoFormulario(multipla, { servicos: ['2', '5'] }, true), {
+      servicos: [2, 5],
+    });
+    assert.deepEqual(corpoDoFormulario(multipla, { servicos: [] }, false), { servicos: [] });
+    assert.equal(erroDoFormulario(multipla, { servicos: [] }, false), null);
+  });
+
+  it('caixas marcam os vinculados e mantêm o vinculado inativo', () => {
+    assert.deepEqual(
+      opcoesMultiplas(
+        [
+          { id: 1, nome: 'A' },
+          { id: 2, nome: 'B' },
+        ],
+        [
+          { id: 2, nome: 'B' },
+          { id: 9, nome: 'Antigo' },
+        ],
+        '(inativo)',
+      ),
+      [
+        { valor: '1', rotulo: 'A', marcado: false },
+        { valor: '2', rotulo: 'B', marcado: true },
+        { valor: '9', rotulo: 'Antigo (inativo)', marcado: true },
+      ],
+    );
   });
 
   it('confere preenchimento e formato', () => {

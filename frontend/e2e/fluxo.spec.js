@@ -300,6 +300,29 @@ test('cadastros: unidade, serviço e CID, com busca, edição, duplicado e inati
   await servico.getByRole('button', { name: /^Reativar/ }).click();
   await expect(servico.locator('.selo')).toHaveText('Ativo');
 
+  // Serviços da unidade: marcados na edição, mostrados na lista e protegidos ao inativar.
+  await page.getByRole('button', { name: 'Unidades', exact: true }).click();
+  await unidade.getByRole('button', { name: /^Editar/ }).click();
+  const caixa = page.locator('#secao-unidades').getByLabel('<b>Consulta</b> Ortopedia');
+  await expect(caixa).not.toBeChecked();
+  await caixa.check();
+  await page.getByRole('button', { name: 'Salvar unidade' }).click();
+  await expect(unidade).toContainText('<b>Consulta</b> Ortopedia');
+  await expect(page.locator('#secao-unidades tbody b')).toHaveCount(0);
+  await unidade.getByRole('button', { name: /^Editar/ }).click();
+  await expect(caixa).toBeChecked();
+  await page
+    .locator('#secao-unidades form.ficha')
+    .getByRole('button', { name: 'Cancelar' })
+    .click();
+
+  await page.getByRole('button', { name: 'Serviços', exact: true }).click();
+  await servico.getByRole('button', { name: /^Inativar/ }).click();
+  await expect(page.locator('#secao-servicos > .form__status')).toHaveText(
+    'Há unidades ativas com este serviço: remova-o delas antes de inativar.',
+  );
+  await expect(servico.locator('.selo')).toHaveText('Ativo');
+
   await page.getByRole('button', { name: 'CID', exact: true }).click();
   await page.getByRole('button', { name: 'Novo CID' }).click();
   await page.getByLabel('Código CID').fill('errado');

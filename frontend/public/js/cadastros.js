@@ -5,6 +5,7 @@ import {
   erroDoFormulario,
   formatarTelefone,
   opcoesAtivas,
+  opcoesMultiplas,
   PADRAO_CID,
 } from './lib/cadastros.js';
 import { definirStatus, el } from './lib/dom.js';
@@ -60,12 +61,23 @@ export const CATALOGOS = {
         opcional: true,
         vazio: null,
       },
+      {
+        nome: 'servicos',
+        rotulo: 'Serviços oferecidos',
+        multipla: true,
+        opcoesDe: '/servicos/opcoes',
+        sufixoInativo: '(inativo)',
+      },
     ],
     colunas: [
       { titulo: 'Nome', valor: (item) => item.nome },
       { titulo: 'Tipo', valor: (item) => item.tipo_unidade },
       { titulo: 'Endereço', valor: (item) => item.endereco },
       { titulo: 'Telefone', valor: (item) => formatarTelefone(item.telefone), semQuebra: true },
+      {
+        titulo: 'Serviços',
+        valor: (item) => item.servicos.map(({ nome }) => nome).join(', ') || '—',
+      },
     ],
   },
   servicos: {
@@ -116,6 +128,7 @@ export const CATALOGOS = {
 };
 
 function controleDoCampo(campo, id) {
+  if (campo.multipla) return el('div', { id, class: 'grupos__lista' });
   if (campo.opcoesDe) return el('select', { id });
   return el('input', { id, type: 'text', maxlength: campo.max, autocomplete: 'off' });
 }
@@ -155,14 +168,45 @@ export function criarCadastro(chamarApi, catalogo, podeGerenciar) {
 
   function valoresDoForm() {
     const valores = {};
-    for (const campo of catalogo.campos) valores[campo.nome] = $(idCampo(campo)).value;
+    for (const campo of catalogo.campos) {
+      const controle = $(idCampo(campo));
+      valores[campo.nome] = campo.multipla
+        ? [...controle.querySelectorAll('input:checked')].map((caixa) => caixa.value)
+        : controle.value;
+    }
     return valores;
+  }
+
+  function preencherCaixas(campo, lista) {
+    const destino = $(idCampo(campo));
+    if (lista.length === 0) {
+      destino.replaceChildren(el('p', { class: 'dica' }, 'Nenhum serviço ativo cadastrado.'));
+      return;
+    }
+    destino.replaceChildren(
+      ...lista.map(({ valor, rotulo, marcado }) => {
+        const id = `${idCampo(campo)}-${valor}`;
+        return el(
+          'label',
+          { class: 'grupo', for: id },
+          el('input', { id, type: 'checkbox', value: valor, checked: marcado }),
+          rotulo,
+        );
+      }),
+    );
   }
 
   // Combobox vinda da API: sem as opções o formulário não abre, para não gravar valor errado.
   async function carregarOpcoes(item) {
     for (const campo of catalogo.campos.filter((c) => c.opcoesDe)) {
       const { opcoes } = await chamarApi('GET', campo.opcoesDe);
+      if (campo.multipla) {
+        preencherCaixas(
+          campo,
+          opcoesMultiplas(opcoes, item?.[campo.nome] ?? [], campo.sufixoInativo),
+        );
+        continue;
+      }
       const lista = opcoesAtivas(
         opcoes,
         item?.[campo.nome],
@@ -186,6 +230,7 @@ export function criarCadastro(chamarApi, catalogo, podeGerenciar) {
     form.reset();
     tituloForm.textContent = item ? `Editar ${catalogo.singular}` : catalogo.novo;
     for (const campo of catalogo.campos) {
+      if (campo.multipla) continue;
       const controle = $(idCampo(campo));
       if (item) controle.value = item[campo.nome] ?? '';
       // Campo imutável aparece na edição, mas não pode ser alterado.
@@ -199,12 +244,19 @@ export function criarCadastro(chamarApi, catalogo, podeGerenciar) {
   form.append(
     tituloForm,
     ...catalogo.campos.map((campo) =>
-      el(
-        'div',
-        { class: 'field' },
-        el('label', { for: idCampo(campo) }, campo.rotulo),
-        controleDoCampo(campo, idCampo(campo)),
-      ),
+      campo.multipla
+        ? el(
+            'fieldset',
+            { class: 'grupos' },
+            el('legend', {}, campo.rotulo),
+            controleDoCampo(campo, idCampo(campo)),
+          )
+        : el(
+            'div',
+            { class: 'field' },
+            el('label', { for: idCampo(campo) }, campo.rotulo),
+            controleDoCampo(campo, idCampo(campo)),
+          ),
     ),
     statusForm,
     el(

@@ -13,6 +13,10 @@ export function corpoDoFormulario(campos, valores, editando) {
   const corpo = {};
   for (const campo of campos) {
     if (editando && campo.soNaCriacao) continue;
+    if (campo.multipla) {
+      corpo[campo.nome] = (valores[campo.nome] ?? []).map(Number);
+      continue;
+    }
     const valor = (valores[campo.nome] ?? '').trim();
     if (valor === '' && campo.opcional) corpo[campo.nome] = campo.vazio;
     else corpo[campo.nome] = campo.numerico ? Number(valor) : valor;
@@ -23,7 +27,7 @@ export function corpoDoFormulario(campos, valores, editando) {
 /** Primeira mensagem de erro de preenchimento, ou null se está tudo certo. */
 export function erroDoFormulario(campos, valores, editando) {
   for (const campo of campos) {
-    if (editando && campo.soNaCriacao) continue;
+    if ((editando && campo.soNaCriacao) || campo.multipla) continue;
     const valor = (valores[campo.nome] ?? '').trim();
     if (valor === '' && !campo.opcional) return `Preencha: ${campo.rotulo}.`;
     if (valor !== '' && campo.padrao && !campo.padrao.test(valor)) return campo.mensagem;
@@ -38,6 +42,26 @@ export function opcoesAtivas(ativas, atualId, atualNome, sufixoInativo) {
     opcoes.push({ valor: String(atualId), rotulo: `${atualNome ?? atualId} ${sufixoInativo}` });
   }
   return opcoes;
+}
+
+/** Caixas de seleção: os ativos e os já vinculados, marcados, mesmo que estejam inativos. */
+export function opcoesMultiplas(ativas, atuais, sufixoInativo) {
+  const marcados = new Set(atuais.map(({ id }) => id));
+  const idsAtivos = new Set(ativas.map(({ id }) => id));
+  return [
+    ...ativas.map(({ id, nome }) => ({
+      valor: String(id),
+      rotulo: nome,
+      marcado: marcados.has(id),
+    })),
+    ...atuais
+      .filter(({ id }) => !idsAtivos.has(id))
+      .map(({ id, nome }) => ({
+        valor: String(id),
+        rotulo: `${nome} ${sufixoInativo}`,
+        marcado: true,
+      })),
+  ];
 }
 
 export function opcoesDeUnidade(ativas, atualId, atualNome) {

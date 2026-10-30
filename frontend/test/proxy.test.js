@@ -104,6 +104,7 @@ describe('repasse /api para o backend', () => {
     ['PATCH', '/tipos-unidade/4'],
     ['DELETE', '/tipos-unidade/4'],
     ['POST', '/tipos-unidade/4/reativar'],
+    ['GET', '/servicos/opcoes'],
     ['POST', '/unidades/lista'],
     ['POST', '/unidades'],
     ['GET', '/unidades/opcoes'],

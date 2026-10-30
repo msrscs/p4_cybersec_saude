@@ -10,7 +10,7 @@ const ROTAS = [
   /^\/auth\/mfa\/(cadastro|ativar|verificar|recuperar|codigos)$/,
   /^\/logs\/(consulta|acoes|integridade)$/,
   /^\/(tipos-unidade|unidades|servicos|cids)(\/lista)?$/,
-  /^\/(tipos-unidade|unidades)\/opcoes$/,
+  /^\/(tipos-unidade|unidades|servicos)\/opcoes$/,
   /^\/(tipos-unidade|unidades|servicos)\/[1-9][0-9]{0,9}(\/reativar)?$/,
   /^\/cids\/[0-9a-f]{64}(\/reativar)?$/,
   /^\/usuarios(\/lista|\/grupos)?$/,
