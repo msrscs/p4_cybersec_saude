@@ -27,6 +27,13 @@ def buscar_varios(db: Session, cpf_hashes: Iterable[bytes]) -> list[Paciente]:
     return list(db.scalars(select(Paciente).where(Paciente.cpf_hash.in_(list(cpf_hashes)))))
 
 
+def hashes_por_ids(db: Session, ids: Iterable[uuid.UUID]) -> dict[uuid.UUID, bytes]:
+    consulta = select(Paciente.id_publico, Paciente.cpf_hash).where(
+        Paciente.id_publico.in_(list(ids))
+    )
+    return {id_publico: cpf_hash for id_publico, cpf_hash in db.execute(consulta)}
+
+
 def listar(db: Session, *, limite: int, depois: Paciente | None = None) -> list[Paciente]:
     """Mais recentes primeiro, por cursor: o nome é cifrado e não pode ser ordenado no banco."""
     consulta = (

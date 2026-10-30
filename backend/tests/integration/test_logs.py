@@ -1,6 +1,9 @@
 """RF-04 / THREAT_MODEL T1, R1, E1: consulta do log, somente leitura e auditada (ADR-0015)."""
 
+import re
+import uuid
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import pytest
 from fastapi import FastAPI
@@ -97,6 +100,77 @@ def test_auditor_ve_so_o_hash_e_nenhum_cpf(logar: Logar) -> None:  # noqa: F811
     assert len(item["usuario"]) == len(item["paciente"]) == 12
     assert str(dados["cpf"]) not in resp.text and formatar_cpf(admin.cpf) not in resp.text
     assert "log:ver_cpf" not in auditor.api.get("/auth/sessao").json()["permissoes"]
+
+
+def _evento_de_lista(itens: list[dict[str, Any]]) -> dict[str, Any]:
+    return next(
+        i for i in itens if i["resumo"].get("origem") == "lista" and i["resumo"]["pacientes"]
+    )
+
+
+def test_evento_de_lista_mostra_cpf_dos_pacientes_para_o_administrador(
+    logar: Logar,  # noqa: F811
+    fabrica_sessao: Fabrica,
+) -> None:
+    admin = logar("Administrador")
+    dados = [_novo(), _novo()]
+    for paciente in dados:
+        admin.api.post("/pacientes", json=paciente)
+    admin.api.post("/pacientes/lista", json={})
+    corpo = _consulta(admin.api, acao="sensitive_data_access", cpf=formatar_cpf(admin.cpf))
+    item = _evento_de_lista(corpo["itens"])  # type: ignore[arg-type]
+    assert item["paciente"] is None and item["paciente_cpf"] is None
+    assert {str(d["cpf"]) for d in dados} <= set(item["pacientes_lista"])
+    assert len(item["pacientes_lista"]) == len(item["resumo"]["pacientes"])
+    # O que está gravado não muda: continua sem CPF.
+    with fabrica_sessao() as db:
+        evento = db.scalars(select(Log).where(Log.seq_cadeia == item["seq"])).one()
+    assert str(dados[0]["cpf"]) not in str(evento.resumo_acessado)
+    leitura = db_ultimo_log_read(fabrica_sessao)
+    assert leitura.resumo_acessado["cpfs_exibidos"] >= 3  # o admin e os 2 pacientes
+
+
+def db_ultimo_log_read(fabrica: Fabrica) -> Log:
+    with fabrica() as db:
+        return db.scalars(
+            select(Log).where(Log.acao == "log_read").order_by(Log.seq_cadeia.desc()).limit(1)
+        ).one()
+
+
+def test_evento_de_lista_mostra_so_hash_para_o_auditor(logar: Logar) -> None:  # noqa: F811
+    admin, auditor = logar("Administrador"), logar("Auditor")
+    dados = _novo()
+    admin.api.post("/pacientes", json=dados)
+    admin.api.post("/pacientes/lista", json={})
+    resp = auditor.api.post(
+        "/logs/consulta", json={"acao": "sensitive_data_access", "cpf": formatar_cpf(admin.cpf)}
+    )
+    item = _evento_de_lista(resp.json()["itens"])
+    assert item["pacientes_lista"]
+    assert all(re.fullmatch(r"[0-9a-f]{12}", valor) for valor in item["pacientes_lista"])
+    assert str(dados["cpf"]) not in resp.text
+
+
+def test_resumo_de_lista_malformado_nao_derruba_a_consulta(
+    logar: Logar,  # noqa: F811
+    fabrica_sessao: Fabrica,
+) -> None:
+    api = logar("Administrador").api
+    with fabrica_sessao() as db, db.begin():
+        auditoria.registrar(
+            db,
+            Evento.SENSITIVE_DATA_ACCESS,
+            ContextoRequisicao(),
+            resumo={"origem": "lista", "pacientes": ["nao-e-uuid", str(uuid.uuid4())]},
+        )
+        auditoria.registrar(
+            db,
+            Evento.SENSITIVE_DATA_ACCESS,
+            ContextoRequisicao(),
+            resumo={"origem": "lista", "pacientes": "nao-e-lista"},
+        )
+    itens = _consulta(api, acao="sensitive_data_access")["itens"]
+    assert itens[0]["pacientes_lista"] == [] and itens[1]["pacientes_lista"] == []  # type: ignore[index]
 
 
 def test_cpf_sem_cadastro_continua_como_hash(

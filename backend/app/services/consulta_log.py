@@ -8,6 +8,7 @@ feita pelo container `tarefas`; a API não recalcula a cadeia nem recebe a chave
 (ADR-0010).
 """
 
+import uuid
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -50,6 +51,7 @@ class ItemLog:
     paciente: str | None
     usuario_cpf: str | None = field(repr=False)
     paciente_cpf: str | None = field(repr=False)
+    pacientes_lista: list[str] = field(repr=False)  # eventos de lista: CPF ou hash de cada um
     hash: str
     resumo: dict[str, Any]
 
@@ -93,12 +95,13 @@ def consultar(
     pagina = linhas[:TAMANHO_PAGINA]
     revelar = autorizacao.tem_permissao(db, autor, Permissao.LOG_VER_CPF)
     cpfs_usuarios = _cpfs_de_usuarios(db, settings, pagina) if revelar else {}
-    cpfs_pacientes = _cpfs_de_pacientes(db, settings, pagina) if revelar else {}
+    listados = _pacientes_listados(db, pagina)
+    cpfs_pacientes = _cpfs_de_pacientes(db, settings, pagina, listados) if revelar else {}
     resumo = _resumo_da_leitura(filtros, cpf_hash, pagina)
     resumo["cpfs_exibidos"] = len(cpfs_usuarios) + len(cpfs_pacientes)
     auditoria.registrar(db, Evento.LOG_READ, ctx, cpf_usuario_hash=autor, resumo=resumo)
     return PaginaLog(
-        itens=[_item(linha, cpfs_usuarios, cpfs_pacientes) for linha in pagina],
+        itens=[_item(linha, cpfs_usuarios, cpfs_pacientes, listados) for linha in pagina],
         proximo=pagina[-1].seq_cadeia if len(linhas) > TAMANHO_PAGINA else None,
     )
 
@@ -123,10 +126,35 @@ def _cpfs_de_usuarios(db: Session, settings: Settings, pagina: list[Log]) -> dic
     return _decifrar_cpfs(registros, lambda r: (r.cpf_hash, usuario.cpf_em_claro(settings, r)))
 
 
-def _cpfs_de_pacientes(db: Session, settings: Settings, pagina: list[Log]) -> dict[bytes, str]:
+def _cpfs_de_pacientes(
+    db: Session, settings: Settings, pagina: list[Log], listados: dict[uuid.UUID, bytes]
+) -> dict[bytes, str]:
     hashes = {linha.cpf_paciente_hash for linha in pagina if linha.cpf_paciente_hash}
+    hashes.update(listados.values())
     registros = paciente_repo.buscar_varios(db, hashes) if hashes else []
     return _decifrar_cpfs(registros, lambda r: (r.cpf_hash, paciente.cpf_em_claro(settings, r)))
+
+
+def _ids_listados(linha: Log) -> list[uuid.UUID]:
+    # Um evento de lista cobre vários pacientes: guarda os identificadores opacos no resumo, em
+    # vez de um único cpf_paciente_hash (ADR-0018).
+    if linha.acao != Evento.SENSITIVE_DATA_ACCESS.value:
+        return []
+    valores = linha.resumo_acessado.get("pacientes")
+    if not isinstance(valores, list):
+        return []
+    ids = []
+    for valor in valores:
+        try:
+            ids.append(uuid.UUID(str(valor)))
+        except ValueError:
+            continue
+    return ids
+
+
+def _pacientes_listados(db: Session, pagina: list[Log]) -> dict[uuid.UUID, bytes]:
+    ids = {id_publico for linha in pagina for id_publico in _ids_listados(linha)}
+    return paciente_repo.hashes_por_ids(db, ids) if ids else {}
 
 
 def _decifrar_cpfs[T](
@@ -164,7 +192,13 @@ def _resumo_da_leitura(
     return resumo
 
 
-def _item(linha: Log, usuarios: dict[bytes, str], pacientes: dict[bytes, str]) -> ItemLog:
+def _item(
+    linha: Log,
+    usuarios: dict[bytes, str],
+    pacientes: dict[bytes, str],
+    listados: dict[uuid.UUID, bytes],
+) -> ItemLog:
+    hashes_listados = [listados[i] for i in _ids_listados(linha) if i in listados]
     return ItemLog(
         seq=linha.seq_cadeia,
         data_hora=linha.data_hora,
@@ -175,6 +209,7 @@ def _item(linha: Log, usuarios: dict[bytes, str], pacientes: dict[bytes, str]) -
         paciente=_curto(linha.cpf_paciente_hash),
         usuario_cpf=usuarios.get(linha.cpf_usuario_hash or b""),
         paciente_cpf=pacientes.get(linha.cpf_paciente_hash or b""),
+        pacientes_lista=[pacientes.get(h) or h.hex()[:_TAMANHO_HASH] for h in hashes_listados],
         hash=linha.hash_assinatura_worm.hex()[:_TAMANHO_HASH],
         resumo=linha.resumo_acessado,
     )
