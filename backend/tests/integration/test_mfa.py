@@ -21,7 +21,7 @@ from app.services.auditoria import ContextoRequisicao
 from app.services.sessao import hash_token
 from app.services.usuario import NovoUsuario
 
-from .conftest import gerar_cpf
+from .conftest import com_csrf, gerar_cpf
 
 SENHA = "Saúde#Recife2026"
 CTX = ContextoRequisicao(ip="203.0.113.10")
@@ -66,6 +66,7 @@ def _ativar(api: TestClient, cpf: str) -> tuple[str, list[str]]:
     segredo = parse_qs(urlparse(prov["otpauth_uri"]).query)["secret"][0]
     resp = api.post("/auth/mfa/ativar", json={"codigo": _codigo(segredo)})
     assert resp.status_code == 200, resp.text
+    com_csrf(api)
     return segredo, resp.json()["codigos_recuperacao"]
 
 
@@ -219,7 +220,7 @@ def test_novos_codigos_exigem_totp_e_invalidam_os_antigos(api: TestClient, cpf: 
     novos = resp.json()["codigos_recuperacao"]
     assert not set(novos) & set(antigos)
 
-    api.post("/auth/logout")
+    assert api.post("/auth/logout").status_code == 204
     _entrar(api, cpf)
     assert api.post("/auth/mfa/recuperar", json={"codigo": antigos[1]}).status_code == 401
     assert api.post("/auth/mfa/recuperar", json={"codigo": novos[0]}).status_code == 200
@@ -330,7 +331,7 @@ def test_troca_de_senha(
         ).first()
     assert evento is not None and evento.resumo_acessado == {"sessoes_encerradas": 1}
 
-    api.post("/auth/logout")
+    assert api.post("/auth/logout").status_code == 204
     assert api.post("/auth/login", json={"cpf": cpf, "senha": SENHA}).status_code == 401
     assert _entrar(api, cpf, nova) == "mfa"
 
@@ -362,7 +363,7 @@ def test_reset_de_acesso_forca_novo_mfa_e_troca_de_senha(
     assert api.get("/auth/sessao").json()["troca_senha_obrigatoria"] is False
     assert api.post("/auth/mfa/codigos", json={"codigo": _codigo(segredo, 1)}).status_code == 200
 
-    api.post("/auth/logout")
+    assert api.post("/auth/logout").status_code == 204
     _entrar(api, cpf, nova)
     assert api.post("/auth/mfa/recuperar", json={"codigo": codigos[0]}).status_code == 401
 
@@ -372,6 +373,7 @@ def _ativar_com_senha(api: TestClient, cpf: str, senha: str) -> tuple[str, list[
     segredo = api.post("/auth/mfa/cadastro").json()["chave"]
     resp = api.post("/auth/mfa/ativar", json={"codigo": _codigo(segredo)})
     assert resp.status_code == 200
+    com_csrf(api)
     return segredo, resp.json()["codigos_recuperacao"]
 
 
@@ -429,7 +431,7 @@ def test_eventos_de_mfa_auditados_sem_segredos(
     _entrar(api, cpf)
     api.post("/auth/mfa/verificar", json={"codigo": "000000"})
     api.post("/auth/mfa/recuperar", json={"codigo": codigos[0]})
-    api.post("/auth/logout")
+    assert com_csrf(api).post("/auth/logout").status_code == 204  # token da sessão nova
 
     with fabrica_sessao() as db:
         eventos = db.scalars(

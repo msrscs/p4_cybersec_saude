@@ -190,3 +190,12 @@ class Paciente(Base):
 
     def __repr__(self) -> str:  # nunca expor campos, nem cifrados
         return "<Paciente>"
+
+
+class LimiteRequisicao(Base):
+    __tablename__ = "limite_requisicao"
+
+    grupo: Mapped[str] = mapped_column(Text, primary_key=True)
+    ip: Mapped[str] = mapped_column(INET, primary_key=True)
+    janela: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), primary_key=True)
+    total: Mapped[int] = mapped_column(default=1)

@@ -33,7 +33,7 @@ from app.services import usuario as usuario_service
 from app.services.auditoria import ContextoRequisicao
 from app.services.usuario import NovoUsuario
 
-from .conftest import gerar_cpf
+from .conftest import com_csrf, gerar_cpf
 
 SENHA = "Saúde#Recife2026"
 Fabrica = sessionmaker[Session]
@@ -76,7 +76,7 @@ def logar(
             segredo = parse_qs(urlparse(uri).query)["secret"][0]
             codigo = pyotp.TOTP(segredo).at(totp.passo(datetime.now(UTC)) * 30)
             assert api.post("/auth/mfa/ativar", json={"codigo": codigo}).status_code == 200
-            return Logado(api, cpf)
+            return Logado(com_csrf(api), cpf)
 
         yield _logar
 

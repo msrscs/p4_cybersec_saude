@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, Response, status
 from fastapi.responses import JSONResponse
 
 from app.api.auth import SEM_CACHE, Config, Ctx, erro
-from app.api.deps import Db, exigir
+from app.api.deps import Db, exigir, limitar
 from app.core.cpf import formatar_cpf
 from app.schemas.auth import ErroResposta
 from app.schemas.paciente import (
@@ -20,6 +20,7 @@ from app.schemas.paciente import (
     PacienteCadastro,
     PacienteResposta,
 )
+from app.services import limite as limite_svc
 from app.services import paciente as paciente_service
 from app.services.autorizacao import Permissao
 from app.services.paciente import (
@@ -31,7 +32,9 @@ from app.services.paciente import (
 )
 from app.services.sessao import SessaoAtual
 
-router = APIRouter(prefix="/pacientes", tags=["pacientes"])
+router = APIRouter(
+    prefix="/pacientes", tags=["pacientes"], dependencies=[Depends(limitar(limite_svc.GERAL))]
+)
 
 NAO_ENCONTRADO = "Paciente não encontrado."
 Leitor = Annotated[SessaoAtual, Depends(exigir(Permissao.PACIENTE_LER))]
@@ -79,6 +82,7 @@ def cadastrar(
 
 @router.post(
     "/busca",
+    dependencies=[Depends(limitar(limite_svc.BUSCA_PACIENTE))],
     response_model=PacienteResposta,
     responses={**ERROS, status.HTTP_404_NOT_FOUND: {"model": ErroResposta}},
 )

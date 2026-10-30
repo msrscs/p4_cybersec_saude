@@ -4,6 +4,7 @@ from app.api import auth, health, mfa, pacientes
 from app.core.config import Settings, get_settings
 from app.core.database import criar_engine, criar_sessionmaker
 from app.core.errors import register_error_handlers
+from app.core.headers import registrar_headers_seguranca
 from app.core.requisicao import registrar_request_id
 
 
@@ -21,6 +22,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.sessionmaker = criar_sessionmaker(app.state.engine)
     register_error_handlers(app)
     registrar_request_id(app)
+    registrar_headers_seguranca(app)
     app.include_router(health.router)
     app.include_router(auth.router)
     app.include_router(mfa.router)

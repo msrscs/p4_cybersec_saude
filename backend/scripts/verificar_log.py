@@ -24,7 +24,7 @@ from app.services.auditoria import ContextoRequisicao
 from app.services.cadeia_log import ResultadoVerificacao
 
 
-def _verificar(
+def verificar_snapshot(
     fabrica: sessionmaker[Session], chave: bytes, ancora: Ancora | None
 ) -> ResultadoVerificacao:
     # Retrato consistente do log inteiro, sem escrever nada nesta transação.
@@ -55,7 +55,7 @@ def main(argv: list[str] | None = None) -> None:
     engine = criar_engine(settings)
     fabrica = criar_sessionmaker(engine)
     try:
-        resultado = _verificar(fabrica, chave, ancora)
+        resultado = verificar_snapshot(fabrica, chave, ancora)
         with fabrica() as db, db.begin():
             cadeia_log.registrar_resultado(db, resultado, ContextoRequisicao())
             novo = (

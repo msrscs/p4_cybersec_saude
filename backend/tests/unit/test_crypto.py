@@ -255,3 +255,22 @@ def test_hash_busca_recusa_valor_vazio_e_chave_invalida() -> None:
         hash_busca(os.urandom(32), FinalidadeHash.CPF, "...-")
     with pytest.raises(ErroCriptografia):
         hash_busca(b"curta", FinalidadeHash.CPF, "12345678909")
+
+
+def test_token_csrf_deterministico_por_sessao_e_com_rotulo_proprio() -> None:
+    from app.core.crypto import FinalidadeHash, csrf_valido, hash_busca, token_csrf
+
+    chave, sessao = os.urandom(32), os.urandom(32)
+    token = token_csrf(chave, sessao)
+    assert token == token_csrf(chave, sessao)
+    assert token != token_csrf(chave, os.urandom(32))
+    assert token != token_csrf(os.urandom(32), sessao)
+    assert csrf_valido(chave, sessao, token)
+    assert not csrf_valido(chave, sessao, None)
+    assert not csrf_valido(chave, sessao, "")
+    assert not csrf_valido(chave, sessao, "çãõ")  # não ASCII: recusa, sem exceção
+    assert not csrf_valido(chave, sessao, token[:-1] + ("0" if token[-1] != "0" else "1"))
+    # Mesmo valor de entrada, finalidade diferente: não colide com o hash de busca.
+    assert bytes.fromhex(token) != hash_busca(chave, FinalidadeHash.CPF, sessao.hex())
+    with pytest.raises(ErroCriptografia):
+        token_csrf(b"curta", sessao)

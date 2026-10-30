@@ -35,6 +35,8 @@ class Evento(StrEnum):
     PATIENT_DEACTIVATED = "patient_deactivated"
     PATIENT_REACTIVATED = "patient_reactivated"
     PATIENT_SEARCH = "patient_search"
+    RATE_LIMITED = "rate_limited"
+    CSRF_REJECTED = "csrf_rejected"
 
 
 @dataclass(frozen=True)

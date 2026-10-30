@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
@@ -28,3 +30,12 @@ def remover_do_usuario(db: Session, cpf_hash: bytes, *, exceto: bytes | None = N
     if exceto is not None:
         comando = comando.where(Sessao.token_hash != exceto)
     return db.execute(comando).rowcount  # type: ignore[attr-defined, no-any-return]
+
+
+def remover_expiradas(db: Session, agora: datetime) -> int:
+    """Sessões vencidas por inatividade ou pela vida máxima (limpeza periódica)."""
+    comando = delete(Sessao).where(
+        (Sessao.expira_em <= agora)
+        | (Sessao.expira_absoluta.is_not(None) & (Sessao.expira_absoluta <= agora))
+    )
+    return int(db.execute(comando).rowcount)  # type: ignore[attr-defined]

@@ -195,3 +195,20 @@ def hash_busca(chave_hmac: bytes, finalidade: FinalidadeHash, valor: str) -> byt
         raise ErroCriptografia("Chave HMAC inválida.")
     mensagem = _aad(b"hash", finalidade.value.encode(), normalizar(finalidade, valor).encode())
     return hmac.new(chave_hmac, mensagem, hashlib.sha256).digest()
+
+
+def token_csrf(chave_hmac: bytes, token_hash: bytes) -> str:
+    """Token CSRF da sessão (ADR-0013): HMAC do hash do token de sessão, com rótulo próprio.
+
+    Derivado, não armazenado: muda a cada sessão e não revela o token de sessão.
+    """
+    if len(chave_hmac) != TAMANHO_CHAVE:
+        raise ErroCriptografia("Chave HMAC inválida.")
+    return hmac.new(chave_hmac, _aad(b"csrf", token_hash), hashlib.sha256).hexdigest()
+
+
+def csrf_valido(chave_hmac: bytes, token_hash: bytes, enviado: str | None) -> bool:
+    if not enviado:
+        return False
+    # Em bytes: compare_digest recusa str com caracteres não ASCII (o header vem do cliente).
+    return hmac.compare_digest(token_csrf(chave_hmac, token_hash).encode(), enviado.encode())

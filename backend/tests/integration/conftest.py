@@ -19,13 +19,14 @@ from alembic.config import Config
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from psycopg import sql
+from psycopg.conninfo import make_conninfo
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import Settings
 from app.core.crypto import gerar_chave_b64
 from app.core.database import criar_engine, criar_sessionmaker
-from app.core.db_url import APP_DB_ROLE, MIGRATOR_DB_ROLE, build_database_url
+from app.core.db_url import APP_DB_ROLE, MIGRATOR_DB_ROLE, build_database_url, tls_do_ambiente
 from app.main import create_app
 from scripts.bootstrap_db import bootstrap
 
@@ -41,6 +42,7 @@ class BancoTeste:
 
     def connect(self, role: str, password: str) -> psycopg.Connection[tuple[object, ...]]:
         return psycopg.connect(
+            make_conninfo(**tls_do_ambiente()),
             user=role,
             password=password,
             dbname=self.name,
@@ -52,6 +54,7 @@ class BancoTeste:
 
 def superuser_connect(dbname: str, host: str, port: int) -> psycopg.Connection[tuple[object, ...]]:
     return psycopg.connect(
+        make_conninfo(**tls_do_ambiente()),
         user=os.environ["POSTGRES_USER"],
         password=os.environ["POSTGRES_PASSWORD"],
         dbname=dbname,
@@ -68,6 +71,7 @@ def _url_migrator(db: BancoTeste) -> str:
         database=db.name,
         host=db.host,
         port=db.port,
+        tls=tls_do_ambiente(),
     )
     return url.render_as_string(hide_password=False)
 
@@ -161,6 +165,10 @@ def settings_integracao(test_db: BancoTeste) -> Settings:
         hmac_key=gerar_chave_b64(),
         log_checkpoint_key=gerar_chave_b64(),
         bcrypt_rounds=4,
+        db_sslmode=os.environ.get("DB_SSLMODE", "verify-full"),
+        db_sslrootcert=os.environ.get("DB_SSLROOTCERT"),
+        # Todos os testes saem do mesmo "IP"; o limite é testado num app próprio.
+        limite_requisicoes_ativo=False,
     )
 
 
@@ -181,6 +189,7 @@ def sessao_superusuario(test_db: BancoTeste) -> Iterator[Session]:
         database=test_db.name,
         host=test_db.host,
         port=test_db.port,
+        tls=tls_do_ambiente(),
     )
     engine = create_engine(url, hide_parameters=True)
     with engine.connect() as conn:
@@ -204,3 +213,11 @@ def api(app_teste: FastAPI) -> Iterator[TestClient]:
     """Cliente novo por teste: cookies de um teste não vazam para outro."""
     with TestClient(app_teste, base_url="https://testserver") as client:
         yield client
+
+
+def com_csrf(api: TestClient) -> TestClient:
+    """Após abrir a sessão completa: envia o token CSRF da sessão como faria o frontend."""
+    resp = api.get("/auth/sessao")
+    assert resp.status_code == 200, resp.text
+    api.headers["X-CSRF-Token"] = resp.json()["csrf_token"]
+    return api

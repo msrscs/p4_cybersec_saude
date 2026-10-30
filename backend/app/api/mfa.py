@@ -1,10 +1,10 @@
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Cookie, Response, status
+from fastapi import APIRouter, Cookie, Depends, Response, status
 from fastapi.responses import JSONResponse
 
 from app.api.auth import SEM_CACHE, Config, Ctx, erro
-from app.api.deps import COOKIE_PRE_AUTH, Db, SessaoLiberada, agora, definir_sessao
+from app.api.deps import COOKIE_PRE_AUTH, Db, SessaoLiberada, agora, definir_sessao, limitar
 from app.schemas.auth import (
     AutenticadoResposta,
     CodigoRecuperacaoEntrada,
@@ -13,10 +13,13 @@ from app.schemas.auth import (
     ErroResposta,
     ProvisionamentoResposta,
 )
+from app.services import limite as limite_svc
 from app.services import mfa as mfa_service
 from app.services.mfa import PreAuthInvalida
 
-router = APIRouter(prefix="/auth/mfa", tags=["mfa"])
+router = APIRouter(
+    prefix="/auth/mfa", tags=["mfa"], dependencies=[Depends(limitar(limite_svc.MFA))]
+)
 
 PRE_AUTH_INVALIDA = "Sessão de login inválida ou expirada. Entre novamente."
 CODIGO_INVALIDO = "Código inválido."
