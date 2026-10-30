@@ -406,9 +406,12 @@ def test_script_de_reset(
             resetar_acesso.main(["--cpf", cpf])
 
 
-def test_script_de_reset_valida_cpf(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_script_de_reset_valida_cpf(
+    monkeypatch: pytest.MonkeyPatch, settings_integracao: Settings
+) -> None:
     from scripts import resetar_acesso
 
+    monkeypatch.setattr(resetar_acesso, "get_settings", lambda: settings_integracao)
     with pytest.raises(SystemExit, match="CPF inválido"):
         resetar_acesso.main(["--cpf", "111.111.111-11"])
     monkeypatch.setattr("builtins.input", lambda _prompt: "RESETAR")
