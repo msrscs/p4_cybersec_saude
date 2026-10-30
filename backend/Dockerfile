@@ -9,6 +9,8 @@ WORKDIR /app
 COPY pyproject.toml uv.lock .python-version ./
 RUN uv sync --locked --no-dev --no-install-project
 COPY app ./app
+# Só as rotinas do container `tarefas`; os scripts administrativos não entram na imagem.
+COPY scripts/__init__.py scripts/tarefas.py scripts/verificar_log.py ./scripts/
 
 FROM python:3.14-slim AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PATH="/app/.venv/bin:$PATH"

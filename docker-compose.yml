@@ -4,6 +4,7 @@ x-hardening: &hardening
   cap_drop: [ALL]
   security_opt: ["no-new-privileges:true"]
   tmpfs: ["/tmp"]
+  group_add: ["${CERTS_GID:-1000}"]   # lê as chaves TLS em certs/ (0640, ADR-0013)
 
 services:
   db:
@@ -14,8 +15,12 @@ services:
     ports:
       - "127.0.0.1:5433:5432"   # só acessível da sua máquina; 5433 evita o conflito
     networks: [internal, db_host]
+    entrypoint: ["/infra/iniciar.sh"]   # TLS obrigatório (ADR-0013)
     volumes:
       - cybersec_saude_pgdata:/var/lib/postgresql
+      - ./infra/postgres:/infra:ro
+      - ./certs/db.crt:/certs/db.crt:ro
+      - ./certs/db.key:/certs/db.key:ro
     security_opt: ["no-new-privileges:true"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
@@ -35,13 +40,67 @@ services:
       APP_DB_PASSWORD: ${APP_DB_PASSWORD:?defina APP_DB_PASSWORD no .env}
       DB_HOST: db
       DB_PORT: "5432"
+      DB_SSLMODE: verify-full
+      DB_SSLROOTCERT: /certs/ca.crt
       # Chaves de criptografia (ADR-0004): só no ambiente, nunca no banco.
       KEK_KEYRING: ${KEK_KEYRING:?defina KEK_KEYRING no .env (scripts.gerar_chaves)}
       KEK_ATIVA: ${KEK_ATIVA:?defina KEK_ATIVA no .env}
       HMAC_KEY: ${HMAC_KEY:?defina HMAC_KEY no .env}
       # IP real do usuário para a auditoria: só o frontend pode informar X-Forwarded-For.
       FORWARDED_ALLOW_IPS: 172.30.10.10
+    command:
+      - uvicorn
+      - app.main:create_app
+      - --factory
+      - --host=0.0.0.0
+      - --port=8000
+      - --no-server-header
+      - --proxy-headers
+      - --ssl-certfile=/certs/backend.crt
+      - --ssl-keyfile=/certs/backend.key
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import ssl, urllib.request as u; u.urlopen('https://backend:8000/health', timeout=2, context=ssl.create_default_context(cafile='/certs/ca.crt'))"
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    volumes:
+      - ./certs/ca.crt:/certs/ca.crt:ro
+      - ./certs/backend.crt:/certs/backend.crt:ro
+      - ./certs/backend.key:/certs/backend.key:ro
     networks: [internal]          # sem porta publicada: só o frontend fala com a API
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Rotinas periódicas (ADR-0013): limpeza a cada 15 min e verificação do log a cada hora.
+  tarefas:
+    <<: *hardening
+    build: ./backend
+    container_name: cybersec_saude-tarefas
+    restart: unless-stopped
+    environment:
+      ENVIRONMENT: ${ENVIRONMENT:-dev}
+      POSTGRES_DB: ${POSTGRES_DB:?defina POSTGRES_DB no .env}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?defina APP_DB_PASSWORD no .env}
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_SSLMODE: verify-full
+      DB_SSLROOTCERT: /certs/ca.crt
+      KEK_KEYRING: ${KEK_KEYRING:?defina KEK_KEYRING no .env (scripts.gerar_chaves)}
+      KEK_ATIVA: ${KEK_ATIVA:?defina KEK_ATIVA no .env}
+      HMAC_KEY: ${HMAC_KEY:?defina HMAC_KEY no .env}
+      # Só este container recebe a chave dos checkpoints; a API não precisa dela (ADR-0010).
+      LOG_CHECKPOINT_KEY: ${LOG_CHECKPOINT_KEY:?defina LOG_CHECKPOINT_KEY no .env}
+    command: ["python", "-m", "scripts.tarefas", "agendar"]
+    healthcheck:
+      disable: true               # não serve HTTP
+    volumes:
+      - ./certs/ca.crt:/certs/ca.crt:ro
+    networks: [internal]
     depends_on:
       db:
         condition: service_healthy
@@ -52,15 +111,44 @@ services:
     container_name: cybersec_saude-frontend
     restart: unless-stopped
     environment:
-      API_URL: http://backend:8000
-    ports:
-      - "127.0.0.1:3000:3000"
-    networks:
+      API_URL: https://backend:8000
+      NODE_EXTRA_CA_CERTS: /certs/ca.crt   # confere o certificado do backend contra a CA interna
+      TLS_CERT: /certs/frontend.crt
+      TLS_KEY: /certs/frontend.key
+      PROXY_CONFIAVEL: 172.30.20.10        # só a borda pode informar X-Forwarded-For
+    volumes:
+      - ./certs/ca.crt:/certs/ca.crt:ro
+      - ./certs/frontend.crt:/certs/frontend.crt:ro
+      - ./certs/frontend.key:/certs/frontend.key:ro
+    networks:                     # sem porta publicada e sem saída: só a borda fala com o frontend
       internal:
         ipv4_address: 172.30.10.10   # fixo: é o único IP em FORWARDED_ALLOW_IPS do backend
-      web: {}
+      borda: {}
     depends_on:
       backend:
+        condition: service_healthy
+
+  # Único ponto exposto (ADR-0013): https://cybersec.localhost:8443
+  edge:
+    <<: *hardening
+    build: ./infra/caddy
+    container_name: cybersec_saude-edge
+    restart: unless-stopped
+    tmpfs: ["/tmp", "/config:uid=65532,gid=65532", "/data:uid=65532,gid=65532"]
+    ports:
+      - "127.0.0.1:8443:8443"
+      - "127.0.0.1:8080:8080"     # só redireciona para HTTPS
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./certs/ca.crt:/certs/ca.crt:ro
+      - ./certs/edge.crt:/certs/edge.crt:ro
+      - ./certs/edge.key:/certs/edge.key:ro
+    networks:
+      borda:
+        ipv4_address: 172.30.20.10   # fixo: é o valor de PROXY_CONFIAVEL do frontend
+      web: {}
+    depends_on:
+      frontend:
         condition: service_healthy
 
 networks:
@@ -69,7 +157,12 @@ networks:
     ipam:
       config:
         - subnet: 172.30.10.0/24
-  web: {}
+  borda:
+    internal: true                # borda -> frontend
+    ipam:
+      config:
+        - subnet: 172.30.20.0/24
+  web: {}                         # só a borda: publica as portas no localhost
   db_host: {}                     # apenas para publicar a porta do banco no localhost (dev)
 
 volumes:
