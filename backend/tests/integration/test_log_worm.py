@@ -8,7 +8,7 @@ from alembic import command
 from alembic.config import Config
 from psycopg import errors
 
-from app.core.db_url import MIGRATOR_DB_ROLE, build_database_url
+from app.core.db_url import MIGRATOR_DB_ROLE, build_database_url, tls_do_ambiente
 
 from .conftest import ALEMBIC_INI, BancoTeste
 
@@ -96,6 +96,7 @@ def test_downgrade_do_log_e_recusado(test_db: BancoTeste, monkeypatch: pytest.Mo
         database=test_db.name,
         host=test_db.host,
         port=test_db.port,
+        tls=tls_do_ambiente(),
     )
     monkeypatch.setenv("MIGRATION_DATABASE_URL", url.render_as_string(hide_password=False))
     with pytest.raises(RuntimeError, match="WORM"):

@@ -1,4 +1,5 @@
 # Segredos
+certs/
 .env
 .env.*
 !.env.example

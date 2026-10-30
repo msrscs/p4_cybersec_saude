@@ -8,7 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import URL
 
 from app.core.crypto import Keyring, carregar_keyring, decodificar_chave
-from app.core.db_url import APP_DB_ROLE, build_database_url
+from app.core.db_url import APP_DB_ROLE, build_database_url, parametros_tls
 from app.core.senha import ROUNDS_MINIMO_PRODUCAO
 
 
@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     app_db_password: SecretStr
     db_host: str = "localhost"
     db_port: int = 5433
+    # TLS até o Postgres (ADR-0013). Produção só aceita verify-full.
+    db_sslmode: Literal["verify-full", "require", "disable"] = "verify-full"
+    db_sslrootcert: str | None = None
 
     # Chaves de criptografia (ADR-0004). Nunca ficam no banco.
     kek_keyring: SecretStr
@@ -31,6 +34,9 @@ class Settings(BaseSettings):
     # Assina os checkpoints da cadeia do log (ADR-0010). Só o script de verificação usa;
     # a API não precisa dela e o container do backend não a recebe.
     log_checkpoint_key: SecretStr | None = None
+
+    # Limite de requisições por IP (ADR-0013). Só pode ser desligado fora de produção.
+    limite_requisicoes_ativo: bool = True
 
     # Custo do bcrypt (ADR-0003). Abaixo de 12 só é aceito em ENVIRONMENT=test.
     bcrypt_rounds: int = 12
@@ -43,6 +49,15 @@ class Settings(BaseSettings):
         chave_hmac = self.chave_hmac
         if self.chave_checkpoint is not None and self.chave_checkpoint == chave_hmac:
             raise ValueError("LOG_CHECKPOINT_KEY deve ser diferente de HMAC_KEY.")
+        return self
+
+    @model_validator(mode="after")
+    def _validar_tls_banco(self) -> Self:
+        _ = self.tls_banco
+        if self.is_production and self.db_sslmode != "verify-full":
+            raise ValueError("Em produção, DB_SSLMODE deve ser verify-full.")
+        if self.is_production and not self.limite_requisicoes_ativo:
+            raise ValueError("Em produção, o limite de requisições não pode ser desligado.")
         return self
 
     @model_validator(mode="after")
@@ -64,7 +79,12 @@ class Settings(BaseSettings):
             database=self.postgres_db,
             host=self.db_host,
             port=self.db_port,
+            tls=self.tls_banco,
         )
+
+    @cached_property
+    def tls_banco(self) -> dict[str, str]:
+        return parametros_tls(self.db_sslmode, self.db_sslrootcert)
 
     @cached_property
     def keyring(self) -> Keyring:

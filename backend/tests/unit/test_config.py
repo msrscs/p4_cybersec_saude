@@ -29,6 +29,7 @@ def test_url_usa_role_da_aplicacao() -> None:
 
 def test_docs_desabilitados_em_producao(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ENVIRONMENT", "prod")
+    monkeypatch.setenv("LIMITE_REQUISICOES_ATIVO", "true")
     config.get_settings.cache_clear()
     try:
         client = TestClient(create_app())
@@ -106,3 +107,27 @@ def test_chave_de_checkpoint_opcional_e_validada(monkeypatch: pytest.MonkeyPatch
     with pytest.raises(ValidationError) as exc:
         Settings()
     assert "YWJj" not in str(exc.value)
+
+
+def test_tls_do_banco_vai_na_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    url = Settings().database_url
+    assert url.query == {"sslmode": "verify-full", "sslrootcert": "/certs/ca.crt"}
+
+
+@pytest.mark.parametrize(
+    ("variaveis", "mensagem"),
+    [
+        ({"DB_SSLMODE": "verify-full", "DB_SSLROOTCERT": ""}, "DB_SSLROOTCERT"),
+        ({"DB_SSLMODE": "allow"}, "db_sslmode"),
+        ({"ENVIRONMENT": "prod", "DB_SSLMODE": "require"}, "verify-full"),
+        ({"ENVIRONMENT": "prod", "LIMITE_REQUISICOES_ATIVO": "false"}, "limite"),
+    ],
+)
+def test_regras_de_tls_e_limite(
+    monkeypatch: pytest.MonkeyPatch, variaveis: dict[str, str], mensagem: str
+) -> None:
+    monkeypatch.setenv("LIMITE_REQUISICOES_ATIVO", "true")
+    for nome, valor in variaveis.items():
+        monkeypatch.setenv(nome, valor)
+    with pytest.raises(ValidationError, match=mensagem):
+        Settings()

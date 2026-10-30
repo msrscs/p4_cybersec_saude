@@ -2,7 +2,7 @@
 
 Conecta sempre com a role de migration (DDL), separada da role da aplicação.
 A URL vem de MIGRATION_DATABASE_URL ou é montada a partir de MIGRATOR_DB_PASSWORD,
-POSTGRES_DB, DB_HOST e DB_PORT.
+POSTGRES_DB, DB_HOST e DB_PORT, com TLS de DB_SSLMODE/DB_SSLROOTCERT (ADR-0013).
 """
 
 import os
@@ -11,7 +11,7 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import URL, engine_from_config, make_url, pool
 
-from app.core.db_url import MIGRATOR_DB_ROLE, build_database_url
+from app.core.db_url import MIGRATOR_DB_ROLE, build_database_url, tls_do_ambiente
 
 config = context.config
 
@@ -35,6 +35,7 @@ def _database_url() -> URL:
         database=database,
         host=os.environ.get("DB_HOST", "localhost"),
         port=int(os.environ.get("DB_PORT", "5433")),
+        tls=tls_do_ambiente(),
     )
 
 

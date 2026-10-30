@@ -19,6 +19,9 @@ def _env_ficticio(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setenv("KEK_KEYRING", f"1:{KEK_TESTE}")
     monkeypatch.setenv("KEK_ATIVA", "1")
     monkeypatch.setenv("HMAC_KEY", HMAC_TESTE)
+    monkeypatch.setenv("DB_SSLMODE", "verify-full")
+    monkeypatch.setenv("DB_SSLROOTCERT", "/certs/ca.crt")  # só o caminho; não há conexão
+    monkeypatch.setenv("LIMITE_REQUISICOES_ATIVO", "false")  # o limite usa banco
     config.get_settings.cache_clear()
     yield
     config.get_settings.cache_clear()

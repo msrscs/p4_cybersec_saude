@@ -14,8 +14,9 @@ import sys
 
 import psycopg
 from psycopg import sql
+from psycopg.conninfo import make_conninfo
 
-from app.core.db_url import APP_DB_ROLE, MIGRATOR_DB_ROLE
+from app.core.db_url import APP_DB_ROLE, MIGRATOR_DB_ROLE, tls_do_ambiente
 
 SCHEMA = "app"
 _ROLE_ATTRS = "LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS"
@@ -84,6 +85,7 @@ def _require(name: str) -> str:
 def main() -> None:
     database = _require("POSTGRES_DB")
     with psycopg.connect(
+        make_conninfo(**tls_do_ambiente()),
         user=_require("POSTGRES_USER"),
         password=_require("POSTGRES_PASSWORD"),
         dbname=database,
