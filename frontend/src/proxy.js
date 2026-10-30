@@ -9,6 +9,8 @@ const ROTAS = [
   /^\/auth\/(login|sessao|logout|senha)$/,
   /^\/auth\/mfa\/(cadastro|ativar|verificar|recuperar|codigos)$/,
   /^\/logs\/(consulta|acoes|integridade)$/,
+  /^\/usuarios(\/lista|\/grupos)?$/,
+  /^\/usuarios\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(\/reativar|\/resetar|\/grupos)?$/,
   /^\/pacientes(\/busca|\/lista)?$/,
   /^\/pacientes\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(\/reativar)?$/,
 ];

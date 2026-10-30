@@ -213,6 +213,79 @@ test('auditoria: lista, filtra por evento e por CPF, e mostra detalhes', async (
   await page.getByRole('button', { name: 'Limpar filtros' }).click();
 });
 
+test('usuários: cadastrar com senha temporária, grupos, inativar, reativar e resetar', async () => {
+  const ficha = page.locator('#ficha-usuario');
+  const cpf = gerarCpf();
+  await page.getByRole('button', { name: 'Usuários' }).click();
+  await expect(page.getByRole('heading', { name: 'Usuários', exact: true })).toBeVisible();
+  await expect(page.locator('#corpo-usuarios tr', { hasText: 'Admin E2E' })).toBeVisible();
+
+  // A própria conta não pode ser inativada nem resetada.
+  await page.locator('#corpo-usuarios tr', { hasText: 'Admin E2E' }).getByRole('button').click();
+  await expect(page.locator('#usuario-nome')).toHaveText('Admin E2E');
+  await expect(page.getByRole('button', { name: 'Inativar usuário' })).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Resetar acesso' })).toBeHidden();
+
+  await page.getByRole('button', { name: 'Novo usuário' }).click();
+  await page.getByLabel('CPF do novo usuário').fill(cpf);
+  await page.getByLabel('Nome do usuário').fill('<b>Rita</b> Navegadora');
+  await page.getByLabel('E-mail do usuário').fill(`u${cpf}@recife.pe.gov.br`);
+  await page.locator('#form-usuario-grupos').getByLabel('Navegador').check();
+  await page.getByRole('button', { name: 'Salvar usuário' }).click();
+
+  const senha = page.locator('#usuario-senha-valor');
+  await expect(senha).toHaveText(/^.{16}$/);
+  const temporaria = await senha.textContent();
+  await expect(page.locator('#usuario-nome')).toHaveText('<b>Rita</b> Navegadora');
+  await expect(page.locator('#corpo-usuarios b')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Já entreguei a senha' }).click();
+  await expect(page.locator('#usuario-senha')).toBeHidden();
+  await expect(senha).toHaveText('');
+
+  await page.locator('#usuario-grupos').getByLabel('Auditor').check();
+  await page.getByRole('button', { name: 'Salvar grupos' }).click();
+  await expect(page.locator('#status-usuario')).toHaveText('Grupos atualizados.');
+  const linha = page.locator('#corpo-usuarios tr').first();
+  await expect(linha.locator('td').nth(2)).toHaveText('Navegador, Auditor');
+  await expect(linha.locator('code')).toHaveText(/^\*\*\*\.\d{3}\.\d{3}-\*\*$/);
+
+  await page.getByRole('button', { name: 'Editar usuário' }).click();
+  await page.getByLabel('Nome do usuário').fill('Rita Navegadora');
+  await page.getByRole('button', { name: 'Salvar usuário' }).click();
+  await expect(page.locator('#status-usuario')).toHaveText('Dados atualizados.');
+
+  await page.getByRole('button', { name: 'Inativar usuário' }).click();
+  await expect(page.locator('#usuario-status')).toHaveText('Inativo');
+  await page.getByRole('button', { name: 'Reativar usuário' }).click();
+  await expect(page.locator('#usuario-status')).toHaveText('Ativo');
+
+  await page.getByRole('button', { name: 'Resetar acesso' }).click();
+  await page.getByRole('button', { name: 'Desistir' }).click();
+  await page.getByRole('button', { name: 'Resetar acesso' }).click();
+  await page.getByRole('button', { name: 'Confirmar reset' }).click();
+  await expect(senha).toHaveText(/^.{16}$/);
+  expect(await senha.textContent()).not.toBe(temporaria);
+  await page.getByRole('button', { name: 'Já entreguei a senha' }).click();
+  await expect(ficha).toBeVisible();
+  await page.getByRole('button', { name: 'Fechar ficha' }).click();
+});
+
+test('no celular a página não tem rolagem lateral, em nenhuma seção', async () => {
+  const original = page.viewportSize();
+  await page.setViewportSize({ width: 390, height: 800 });
+  for (const secao of ['Usuários', 'Auditoria', 'Pacientes', 'Minha conta']) {
+    await page.getByRole('button', { name: secao, exact: true }).click();
+    await expect(page.getByRole('button', { name: secao, exact: true })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    const largura = await page.evaluate(() => document.documentElement.scrollWidth);
+    expect(largura, secao).toBeLessThanOrEqual(390);
+  }
+  await page.setViewportSize(original);
+  await page.getByRole('button', { name: 'Pacientes', exact: true }).click();
+});
+
 test('HTTPS, cookie de sessão protegido e CSRF: sem token a API recusa', async () => {
   expect(new URL(page.url()).protocol).toBe('https:');
   const cookies = await page.context().cookies();

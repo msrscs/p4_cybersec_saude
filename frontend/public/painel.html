@@ -29,6 +29,15 @@
           <button
             type="button"
             class="menu__item"
+            data-secao="secao-usuarios"
+            id="menu-usuarios"
+            hidden
+          >
+            Usuários
+          </button>
+          <button
+            type="button"
+            class="menu__item"
             data-secao="secao-auditoria"
             id="menu-auditoria"
             hidden
@@ -223,12 +232,232 @@
             </section>
           </section>
 
+          <!-- Usuários -->
+          <section class="painel" id="secao-usuarios" hidden aria-labelledby="titulo-usuarios">
+            <div class="painel__cabecalho">
+              <h1 id="titulo-usuarios">Usuários</h1>
+              <button type="button" class="button button--pequeno" id="novo-usuario" hidden>
+                Novo usuário
+              </button>
+            </div>
+
+            <div class="aviso aviso--senha" id="usuario-senha" role="status" hidden>
+              <h2>Senha temporária</h2>
+              <p>
+                Entregue por um canal seguro, nunca por e-mail ou chat aberto. Ela não será mostrada
+                de novo, e a pessoa terá de cadastrar o MFA e trocar a senha no primeiro acesso.
+              </p>
+              <p><code id="usuario-senha-valor"></code></p>
+              <p
+                class="form__status"
+                id="status-senha-usuario"
+                role="status"
+                aria-live="polite"
+              ></p>
+              <div class="acoes">
+                <button
+                  type="button"
+                  class="button button--secundario button--pequeno"
+                  id="usuario-senha-copiar"
+                >
+                  Copiar senha
+                </button>
+                <button type="button" class="link link--botao" id="usuario-senha-fechar">
+                  Já entreguei a senha
+                </button>
+              </div>
+            </div>
+
+            <article class="ficha" id="ficha-usuario" hidden aria-labelledby="usuario-nome">
+              <header class="ficha__cabecalho">
+                <h2 id="usuario-nome"></h2>
+                <span class="selo" id="usuario-status"></span>
+              </header>
+              <dl class="ficha__dados">
+                <div>
+                  <dt>CPF</dt>
+                  <dd id="usuario-cpf"></dd>
+                </div>
+                <div>
+                  <dt>E-mail</dt>
+                  <dd id="usuario-email"></dd>
+                </div>
+                <div>
+                  <dt>Unidade</dt>
+                  <dd id="usuario-unidade"></dd>
+                </div>
+                <div>
+                  <dt>MFA ativo</dt>
+                  <dd id="usuario-mfa"></dd>
+                </div>
+                <div>
+                  <dt>Troca de senha pendente</dt>
+                  <dd id="usuario-troca"></dd>
+                </div>
+                <div>
+                  <dt>Bloqueado por tentativas</dt>
+                  <dd id="usuario-bloqueado"></dd>
+                </div>
+              </dl>
+              <fieldset class="grupos">
+                <legend>Grupos</legend>
+                <div class="grupos__lista" id="usuario-grupos"></div>
+                <button
+                  type="button"
+                  class="button button--secundario button--pequeno"
+                  id="usuario-salvar-grupos"
+                  hidden
+                >
+                  Salvar grupos
+                </button>
+              </fieldset>
+              <div class="acoes">
+                <button
+                  type="button"
+                  class="button button--secundario button--pequeno"
+                  id="usuario-editar"
+                  hidden
+                >
+                  Editar usuário
+                </button>
+                <button
+                  type="button"
+                  class="button button--secundario button--pequeno"
+                  id="usuario-resetar"
+                  hidden
+                >
+                  Resetar acesso
+                </button>
+                <button
+                  type="button"
+                  class="button button--perigo button--pequeno"
+                  id="usuario-inativar"
+                  hidden
+                >
+                  Inativar usuário
+                </button>
+                <button
+                  type="button"
+                  class="button button--secundario button--pequeno"
+                  id="usuario-reativar"
+                  hidden
+                >
+                  Reativar usuário
+                </button>
+                <button type="button" class="link link--botao" id="usuario-fechar">
+                  Fechar ficha
+                </button>
+              </div>
+              <div class="aviso" id="usuario-confirmar" hidden>
+                <p>
+                  Resetar gera uma nova senha, apaga o MFA e os códigos de recuperação, e encerra as
+                  sessões desta pessoa. Confirma?
+                </p>
+                <div class="acoes">
+                  <button
+                    type="button"
+                    class="button button--perigo button--pequeno"
+                    id="usuario-confirmar-sim"
+                  >
+                    Confirmar reset
+                  </button>
+                  <button type="button" class="link link--botao" id="usuario-confirmar-nao">
+                    Desistir
+                  </button>
+                </div>
+              </div>
+              <p class="form__status" id="status-usuario" role="status" aria-live="polite"></p>
+            </article>
+
+            <form class="form ficha" id="form-usuario" novalidate autocomplete="off" hidden>
+              <h2 id="titulo-form-usuario">Novo usuário</h2>
+              <p class="dica" id="dica-form-usuario">
+                A senha é gerada pelo sistema e mostrada uma única vez ao salvar.
+              </p>
+              <div class="field" id="campo-cpf-usuario">
+                <label for="form-usuario-cpf">CPF do novo usuário</label>
+                <input
+                  id="form-usuario-cpf"
+                  type="text"
+                  inputmode="numeric"
+                  maxlength="14"
+                  autocomplete="off"
+                />
+              </div>
+              <div class="field">
+                <label for="form-usuario-nome">Nome do usuário</label>
+                <input id="form-usuario-nome" type="text" maxlength="150" autocomplete="off" />
+              </div>
+              <div class="field">
+                <label for="form-usuario-email">E-mail do usuário</label>
+                <input id="form-usuario-email" type="email" maxlength="254" autocomplete="off" />
+              </div>
+              <div class="field">
+                <label for="form-usuario-unidade">Código da unidade (opcional)</label>
+                <input
+                  id="form-usuario-unidade"
+                  type="number"
+                  min="1"
+                  step="1"
+                  autocomplete="off"
+                />
+              </div>
+              <fieldset class="grupos" id="campo-grupos-usuario">
+                <legend>Grupos do novo usuário</legend>
+                <div class="grupos__lista" id="form-usuario-grupos"></div>
+              </fieldset>
+              <p class="form__status" id="status-form-usuario" role="status" aria-live="polite"></p>
+              <div class="acoes">
+                <button class="button button--pequeno" type="submit">Salvar usuário</button>
+                <button class="link link--botao" type="button" id="cancelar-usuario">
+                  Cancelar edição
+                </button>
+              </div>
+            </form>
+
+            <h2 class="lista">Lista de usuários</h2>
+            <p class="dica">Cadastrados mais recentemente primeiro.</p>
+            <div class="tabela">
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">Nome</th>
+                    <th scope="col">CPF</th>
+                    <th scope="col">Grupos</th>
+                    <th scope="col">Situação</th>
+                    <th scope="col"><span class="sr-only">Ação</span></th>
+                  </tr>
+                </thead>
+                <tbody id="corpo-usuarios"></tbody>
+              </table>
+            </div>
+            <p class="form__status" id="status-lista-usuarios" role="status" aria-live="polite"></p>
+            <div class="acoes">
+              <button
+                type="button"
+                class="button button--secundario button--pequeno"
+                id="usuarios-anterior"
+                disabled
+              >
+                Anterior
+              </button>
+              <button
+                type="button"
+                class="button button--secundario button--pequeno"
+                id="usuarios-proxima"
+                disabled
+              >
+                Próxima
+              </button>
+            </div>
+          </section>
+
           <!-- Auditoria -->
           <section class="painel" id="secao-auditoria" hidden aria-labelledby="titulo-auditoria">
             <h1 id="titulo-auditoria">Auditoria</h1>
             <p class="painel__texto">
-              Log somente leitura. CPFs sem cadastro aparecem como hash, e toda consulta fica
-              registrada.
+              Log somente leitura. Só o Administrador vê CPFs; os demais veem hash, e toda consulta
+              fica registrada.
             </p>
 
             <div class="integridade" id="integridade">

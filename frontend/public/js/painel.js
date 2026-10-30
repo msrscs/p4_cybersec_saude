@@ -4,6 +4,7 @@ import { criarAuditoria } from './auditoria.js';
 import { chamar, ErroApi, quandoSessaoExpirar } from './lib/api.js';
 import { cpfValido, formatarCpf, somenteDigitos } from './lib/cpf.js';
 import { definirStatus, el, limpar, mostrarSomente } from './lib/dom.js';
+import { criarUsuarios } from './usuarios.js';
 
 const $ = (id) => document.getElementById(id);
 const INATIVIDADE_MS = 15 * 60 * 1000;
@@ -105,6 +106,10 @@ function limparDados() {
   limpar($('lista-codigos'));
   limpar($('corpo-lista'));
   limpar($('corpo-logs'));
+  limpar($('corpo-usuarios'));
+  for (const id of ['usuario-senha-valor', 'usuario-nome', 'usuario-cpf', 'usuario-email']) {
+    $(id).textContent = '';
+  }
 }
 
 // --- Troca de senha (formulário reutilizado em dois lugares) -----------------------------
@@ -425,10 +430,15 @@ async function iniciar() {
   $('novo-paciente').hidden = !pode('criar');
   const temPacientes = pode('ler') || pode('criar');
   const temLogs = permissoes.has('log:ler');
+  const temUsuarios = permissoes.has('usuario:ler');
   $('sem-permissao').hidden = temPacientes;
   $('lista-pacientes').hidden = !pode('listar');
   $('menu-pacientes').hidden = !temPacientes && temLogs;
   $('menu-auditoria').hidden = !temLogs;
+  $('menu-usuarios').hidden = !temUsuarios;
+  if (temUsuarios) {
+    aoAbrir['secao-usuarios'] = criarUsuarios(chamarApi, permissoes).abrir;
+  }
   if (temLogs) aoAbrir['secao-auditoria'] = criarAuditoria(chamarApi).abrir;
   avisoDeCodigos();
   carregarLista();

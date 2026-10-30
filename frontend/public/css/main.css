@@ -811,6 +811,7 @@ input.codigo {
 }
 
 .tabela {
+  position: relative; /* prende o .sr-only: sem isso, ele alarga a página no celular */
   overflow-x: auto;
   margin: 12px 0;
   border: 1px solid var(--border);
@@ -988,8 +989,7 @@ input.codigo {
   }
 
   .lateral__menu {
-    flex-direction: row;
-    overflow-x: auto;
+    flex-flow: row wrap;
   }
 
   .lateral .menu__item {
@@ -1138,4 +1138,64 @@ input.codigo {
   font-size: 0.8rem;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* Usuários */
+.aviso--senha {
+  margin-bottom: 20px;
+}
+
+.aviso--senha h2 {
+  margin: 0 0 6px;
+}
+
+.aviso--senha code {
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  overflow-wrap: anywhere;
+}
+
+.grupos {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.grupos legend {
+  padding: 0 6px;
+  font-weight: 600;
+}
+
+.grupos__lista {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin-bottom: 10px;
+}
+
+.grupo {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.grupo input {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  padding: 0;
+}
+
+.painel h2.lista {
+  margin-top: 28px;
+}
+
+.selo[data-status='bloqueado'] {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
 }

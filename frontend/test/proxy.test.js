@@ -98,6 +98,15 @@ describe('repasse /api para o backend', () => {
     ['POST', '/logs/consulta'],
     ['GET', '/logs/acoes'],
     ['GET', '/logs/integridade'],
+    ['POST', '/usuarios/lista'],
+    ['GET', '/usuarios/grupos'],
+    ['POST', '/usuarios'],
+    ['GET', `/usuarios/${UUID}`],
+    ['PATCH', `/usuarios/${UUID}`],
+    ['DELETE', `/usuarios/${UUID}`],
+    ['POST', `/usuarios/${UUID}/reativar`],
+    ['POST', `/usuarios/${UUID}/resetar`],
+    ['POST', `/usuarios/${UUID}/grupos`],
     ['POST', '/auth/mfa/verificar'],
   ]) {
     it(`permite ${metodo} ${caminho}`, async () => {
@@ -120,6 +129,8 @@ describe('repasse /api para o backend', () => {
     '/auth/mfa/qualquer',
     '/logs',
     '/logs/qualquer',
+    '/usuarios/1',
+    '/usuarios/qualquer',
     `/pacientes/${UUID.toUpperCase()}`,
   ]) {
     it(`recusa rota fora da lista: ${caminho}`, async () => {

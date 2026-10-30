@@ -28,6 +28,9 @@ const ROTULOS = {
   sensitive_data_access: 'Acesso a dado sensível',
   session_created: 'Sessão criada',
   user_created: 'Usuário cadastrado',
+  user_deactivated: 'Usuário inativado',
+  user_reactivated: 'Usuário reativado',
+  user_updated: 'Usuário alterado',
 };
 
 // Evento novo no backend, ainda sem rótulo: mostra o nome técnico em vez de sumir da tela.

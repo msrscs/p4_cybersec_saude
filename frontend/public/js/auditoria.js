@@ -5,10 +5,10 @@ import { corpoDaConsulta, detalhesDoRegistro, periodoValido, rotuloDaAcao } from
 
 const $ = (id) => document.getElementById(id);
 const dataHora = (iso) => new Date(iso).toLocaleString('pt-BR');
-// CPF decifrado do cadastro; sem cadastro (ex.: login com CPF inexistente), o hash truncado.
+// CPF só para quem tem log:ver_cpf (ADR-0017); nos demais casos, o hash truncado.
 const identificacao = (cpf, hash) => {
   if (cpf) return el('code', { class: 'log__cpf', title: `Hash: ${hash}` }, cpf);
-  return hash ? el('code', { class: 'log__hash', title: 'CPF sem cadastro' }, hash) : '—';
+  return hash ? el('code', { class: 'log__hash', title: 'Hash do CPF' }, hash) : '—';
 };
 
 // Duas linhas por registro: os dados e, ao clicar em Ver, os detalhes na largura da tabela.
