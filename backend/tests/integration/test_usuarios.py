@@ -209,6 +209,7 @@ def test_lista_tem_cpf_mascarado_e_nada_de_email(admin: Logado) -> None:
         "nome": "Joana Prado",
         "status": "ativo",
         "grupos": ["Auditor"],
+        "unidade_nome": None,
     }
     assert cpf not in resp.text and str(dados["email"]) not in resp.text
 
@@ -243,6 +244,148 @@ def test_cadastro_adulterado_nao_derruba_a_lista(admin: Logado, fabrica_sessao: 
     detalhe = admin.api.get(f"/usuarios/{ruim}")
     assert detalhe.status_code == 409
     assert detalhe.json() == {"detail": "Não foi possível ler este cadastro."}
+
+
+# --- Filtros da lista --------------------------------------------------------------------
+
+
+def _nomes(api: TestClient, **corpo: object) -> list[str]:
+    resp = api.post("/usuarios/lista", json=corpo)
+    assert resp.status_code == 200, resp.text
+    return [i["nome"] for i in resp.json()["itens"]]
+
+
+def test_lista_mostra_a_unidade(admin: Logado) -> None:
+    id_unidade = _unidade(admin.api)
+    criado = _criar(admin.api, id_unidade=id_unidade)
+    item = admin.api.post("/usuarios/lista", json={}).json()["itens"][0]
+    assert item["id"] == _id(criado)
+    assert item["unidade_nome"].startswith("Unidade ")
+
+
+def test_busca_por_nome_ignora_maiusculas_e_acentos_e_acha_parte_do_nome(admin: Logado) -> None:
+    marca = uuid.uuid4().hex[:8]
+    alvo = f"José Açucena {marca}"
+    _criar(admin.api, nome=alvo)
+    _criar(admin.api, nome=f"Outra Pessoa {marca}")
+    assert _nomes(admin.api, busca=f"jose acucena {marca}") == [alvo]
+    assert _nomes(admin.api, busca=f"AÇUCENA {marca}") == [alvo]
+    assert len(_nomes(admin.api, busca=marca)) == 2
+    assert _nomes(admin.api, busca=f"ninguem {marca}") == []
+
+
+@pytest.mark.parametrize("formato", ["formatado", "digitos"])
+def test_busca_por_cpf_exata(admin: Logado, formato: str) -> None:
+    dados = _novo(nome=f"Pessoa {uuid.uuid4().hex[:8]}")
+    admin.api.post("/usuarios", json=dados)
+    cpf = str(dados["cpf"])
+    termo = cpf if formato == "formatado" else cpf.replace(".", "").replace("-", "")
+    assert _nomes(admin.api, busca=termo) == [dados["nome"]]
+
+
+@pytest.mark.parametrize("termo", ["123", "111.111.111-11", "12345678900"])
+def test_cpf_parcial_ou_invalido_nao_devolve_ninguem(admin: Logado, termo: str) -> None:
+    assert _nomes(admin.api, busca=termo) == []
+
+
+def test_filtros_por_grupo_e_unidade_e_combinados(admin: Logado) -> None:
+    marca = uuid.uuid4().hex[:8]
+    a, b = _unidade(admin.api), _unidade(admin.api)
+    _criar(admin.api, nome=f"Um {marca}", id_unidade=a, grupos=["Gestor"])
+    _criar(admin.api, nome=f"Dois {marca}", id_unidade=a, grupos=["Auditor"])
+    _criar(admin.api, nome=f"Tres {marca}", id_unidade=b, grupos=["Gestor", "Auditor"])
+    assert set(_nomes(admin.api, id_unidade=a)) == {f"Um {marca}", f"Dois {marca}"}
+    assert set(_nomes(admin.api, busca=marca, grupo="Gestor")) == {f"Um {marca}", f"Tres {marca}"}
+    assert _nomes(admin.api, id_unidade=a, grupo="Auditor") == [f"Dois {marca}"]
+    assert _nomes(admin.api, id_unidade=b, busca=f"Tres {marca}", grupo="Auditor") == [
+        f"Tres {marca}"
+    ]
+    assert _nomes(admin.api, id_unidade=b, busca=f"Um {marca}") == []
+
+
+def test_busca_por_nome_pagina_sem_repetir(admin: Logado) -> None:
+    marca = uuid.uuid4().hex[:8]
+    criados = {_id(_criar(admin.api, nome=f"Lote {marca}")) for _ in range(23)}
+    _criar(admin.api, nome=f"Fora {uuid.uuid4().hex[:8]}")  # não pode aparecer
+    primeira = admin.api.post("/usuarios/lista", json={"busca": f"lote {marca}"}).json()
+    assert len(primeira["itens"]) == 20 and primeira["proximo"] is not None
+    segunda = admin.api.post(
+        "/usuarios/lista", json={"busca": f"lote {marca}", "depois": primeira["proximo"]}
+    ).json()
+    assert len(segunda["itens"]) == 3 and segunda["proximo"] is None
+    vistos = [i["id"] for i in [*primeira["itens"], *segunda["itens"]]]
+    assert len(vistos) == len(set(vistos)) and set(vistos) == criados
+
+
+def test_busca_atravessa_mais_de_um_lote(admin: Logado, monkeypatch: pytest.MonkeyPatch) -> None:
+    marca = uuid.uuid4().hex[:8]
+    alvo = f"Antigo {marca}"
+    _criar(admin.api, nome=alvo)
+    for _ in range(3):
+        _criar(admin.api)  # mais recentes: o alvo só aparece a partir do 2º lote
+    monkeypatch.setattr("app.services.gestao_usuario.LOTE_DA_BUSCA", 2)
+    assert _nomes(admin.api, busca=alvo) == [alvo]
+
+
+def test_cadastro_ilegivel_nao_derruba_a_busca_por_nome(
+    admin: Logado, fabrica_sessao: Fabrica
+) -> None:
+    marca = uuid.uuid4().hex[:8]
+    bom = f"Legivel {marca}"
+    _criar(admin.api, nome=bom)
+    ruim = _id(_criar(admin.api, nome=f"Legivel {uuid.uuid4().hex[:8]}"))
+    with fabrica_sessao() as db, db.begin():
+        registro = db.scalars(select(Usuario).where(Usuario.id_publico == uuid.UUID(ruim))).one()
+        registro.nome_cripto = b"adulterado" * 8
+    assert _nomes(admin.api, busca=marca) == [bom]
+
+
+def test_termo_pesquisado_nao_vai_para_o_log(
+    admin: Logado, fabrica_sessao: Fabrica, settings_integracao: Settings
+) -> None:
+    marca = uuid.uuid4().hex[:8]
+    dados = _novo(nome=f"Sigilosa {marca}", grupos=["Gestor"])
+    admin.api.post("/usuarios", json=dados)
+    id_unidade = _unidade(admin.api)
+    admin.api.post(
+        "/usuarios/lista", json={"busca": marca, "grupo": "Gestor", "id_unidade": id_unidade}
+    )
+    evento = _ultimo(fabrica_sessao, "sensitive_data_access")
+    resumo = evento.resumo_acessado
+    assert resumo["busca"] == "nome" and resumo["grupo"] == "Gestor"
+    assert resumo["id_unidade"] == id_unidade and resumo["usuarios"] == []
+    assert marca not in str(resumo)
+
+    cpf = str(dados["cpf"])
+    admin.api.post("/usuarios/lista", json={"busca": cpf})
+    resumo = _ultimo(fabrica_sessao, "sensitive_data_access").resumo_acessado
+    alvo = hash_busca(settings_integracao.chave_hmac, FinalidadeHash.CPF, cpf).hex()[:12]
+    assert resumo["busca"] == "cpf" and resumo["usuario_alvo"] == alvo
+    assert cpf not in str(resumo) and cpf.replace(".", "").replace("-", "") not in str(resumo)
+
+
+@pytest.mark.parametrize(
+    "corpo",
+    [
+        {"busca": "a"},
+        {"busca": "x" * 151},
+        {"busca": "nome\x00"},
+        {"id_unidade": 0},
+        {"id_unidade": "' OR 1=1 --"},
+        {"grupo": ""},
+        {"limite": 1000},
+    ],
+)
+def test_filtro_invalido(admin: Logado, corpo: dict[str, object]) -> None:
+    resp = admin.api.post("/usuarios/lista", json=corpo)
+    assert resp.status_code == 422
+    assert "OR 1=1" not in resp.text
+
+
+def test_grupo_inexistente_no_filtro(admin: Logado) -> None:
+    resp = admin.api.post("/usuarios/lista", json={"grupo": "Inventado"})
+    assert resp.status_code == 422
+    assert resp.json() == {"detail": "Grupo inválido."}
 
 
 def test_lista_com_cursor_desconhecido(admin: Logado) -> None:

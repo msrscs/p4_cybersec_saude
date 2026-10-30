@@ -1,4 +1,4 @@
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from typing import Any
 
 from sqlalchemy import ColumnElement, func, select
@@ -71,6 +71,13 @@ def unidades_ativas_do_tipo(db: Session, id_tipo_unidade: int) -> int:
         .where(UnidadeSaude.id_tipo_unidade == id_tipo_unidade, UnidadeSaude.status == "ativo")
     )
     return int(db.scalar(consulta) or 0)
+
+
+def nomes_das_unidades(db: Session, ids: Iterable[int]) -> dict[int, str]:
+    consulta = select(UnidadeSaude.id_unidade, UnidadeSaude.nome).where(
+        UnidadeSaude.id_unidade.in_(list(ids))
+    )
+    return {id_unidade: nome for id_unidade, nome in db.execute(consulta)}
 
 
 def usuarios_ativos_na_unidade(db: Session, id_unidade: int) -> int:

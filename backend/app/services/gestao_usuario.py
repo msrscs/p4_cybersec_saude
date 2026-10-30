@@ -6,7 +6,10 @@ vez, com troca obrigatória. Toda ação registra quem fez (cpf_usuario_hash) e 
 conta não pode ser inativada nem resetada, e sempre resta um administrador ativo.
 """
 
+import re
+import unicodedata
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
@@ -15,6 +18,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
+from app.core.cpf import cpf_valido
 from app.core.crypto import (
     DekCifrada,
     ErroCriptografia,
@@ -25,6 +29,7 @@ from app.core.crypto import (
     hash_busca,
 )
 from app.models import Grupo, Usuario
+from app.repositories import cadastro as cadastro_repo
 from app.repositories import rbac as rbac_repo
 from app.repositories import sessao as sessao_repo
 from app.repositories import usuario as usuario_repo
@@ -36,6 +41,7 @@ from app.services.usuario import ErroCadastro, NovoUsuario, gerar_senha_temporar
 
 GRUPO_ADMINISTRADOR = "Administrador"
 TAMANHO_PAGINA = 20
+LOTE_DA_BUSCA = 200  # nomes decifrados por vez ao procurar por nome
 _TABELA = "usuario"
 
 
@@ -57,6 +63,14 @@ class ResumoUsuario:
     nome: str | None = field(repr=False)
     status: str
     grupos: list[str]
+    unidade_nome: str | None
+
+
+@dataclass(frozen=True)
+class FiltrosUsuario:
+    grupo: str | None = None
+    id_unidade: int | None = None
+    busca: str | None = field(default=None, repr=False)  # nome ou CPF
 
 
 @dataclass(frozen=True)
@@ -107,21 +121,68 @@ def nomes_dos_grupos(db: Session) -> list[str]:
 
 
 def listar(
-    db: Session, settings: Settings, depois: uuid.UUID | None, autor: bytes, ctx: ContextoRequisicao
+    db: Session,
+    settings: Settings,
+    filtros: FiltrosUsuario,
+    depois: uuid.UUID | None,
+    autor: bytes,
+    ctx: ContextoRequisicao,
 ) -> PaginaUsuarios:
+    id_grupo = None
+    if filtros.grupo is not None:
+        grupo = rbac_repo.buscar_grupo(db, filtros.grupo)
+        if grupo is None:
+            raise GrupoNaoEncontrado
+        id_grupo = grupo.id_grupo
     referencia = None
     if depois is not None:
         referencia = usuario_repo.buscar_por_id(db, depois)
         if referencia is None:  # cursor que não veio desta API
             return PaginaUsuarios(itens=[], proximo=None)
-    linhas = usuario_repo.listar(db, limite=TAMANHO_PAGINA + 1, depois=referencia)
+    cpf_hash = None
+    termo_nome = None
+    if filtros.busca:
+        if _parece_cpf(filtros.busca):
+            # CPF só por correspondência exata: um pedaço não permite procurar no hash.
+            if not cpf_valido(filtros.busca):
+                return PaginaUsuarios(itens=[], proximo=None)
+            cpf_hash = hash_busca(settings.chave_hmac, FinalidadeHash.CPF, filtros.busca)
+        else:
+            termo_nome = _sem_acento(filtros.busca)
+
+    def lote(limite: int, cursor: Usuario | None) -> list[Usuario]:
+        return usuario_repo.listar(
+            db,
+            limite=limite,
+            depois=cursor,
+            id_grupo=id_grupo,
+            id_unidade=filtros.id_unidade,
+            cpf_hash=cpf_hash,
+        )
+
+    if termo_nome is None:
+        linhas = lote(TAMANHO_PAGINA + 1, referencia)
+    else:
+        linhas = _procurar_por_nome(settings, lote, referencia, termo_nome)
     pagina = linhas[:TAMANHO_PAGINA]
     grupos = rbac_repo.grupos_dos_usuarios(db, [u.cpf_hash for u in pagina])
-    itens = [_resumo(settings, u, grupos.get(u.cpf_hash, [])) for u in pagina]
+    unidades = cadastro_repo.nomes_das_unidades(
+        db, {u.id_unidade for u in pagina if u.id_unidade is not None}
+    )
+    itens = [
+        _resumo(
+            settings,
+            u,
+            grupos.get(u.cpf_hash, []),
+            None if u.id_unidade is None else unidades.get(u.id_unidade),
+        )
+        for u in pagina
+    ]
     resumo: dict[str, Any] = {
         "recurso": _TABELA,
         "origem": "lista",
         "usuarios": [str(u.id_publico) for u in pagina],
+        **_filtros_do_log(filtros, cpf_hash, termo_nome),
     }
     # Falha do AES-GCM é sinal de adulteração: fica no log, e a lista segue utilizável.
     ilegiveis = [str(i.id_publico) for i in itens if i.nome is None]
@@ -355,14 +416,76 @@ def _dados(
     )
 
 
-def _resumo(settings: Settings, usuario: Usuario, grupos: list[str]) -> ResumoUsuario:
+def _parece_cpf(busca: str) -> bool:
+    return re.fullmatch(r"[\d.\-\s]+", busca) is not None
+
+
+def _sem_acento(texto: str) -> str:
+    decomposto = unicodedata.normalize("NFD", texto)
+    return "".join(c for c in decomposto if unicodedata.category(c) != "Mn").casefold()
+
+
+def _procurar_por_nome(
+    settings: Settings,
+    lote: Callable[[int, Usuario | None], list[Usuario]],
+    inicio: Usuario | None,
+    termo: str,
+) -> list[Usuario]:
+    """O nome é cifrado: decifra em lotes até achar uma página e mais um, ou acabar a tabela."""
+    achados: list[Usuario] = []
+    cursor = inicio
+    while len(achados) <= TAMANHO_PAGINA:
+        linhas = lote(LOTE_DA_BUSCA, cursor)
+        for usuario in linhas:
+            if _nome_contem(settings, usuario, termo):
+                achados.append(usuario)
+                if len(achados) > TAMANHO_PAGINA:
+                    return achados
+        if len(linhas) < LOTE_DA_BUSCA:
+            break
+        cursor = linhas[-1]
+    return achados
+
+
+def _nome_contem(settings: Settings, usuario: Usuario, termo: str) -> bool:
+    try:
+        return termo in _sem_acento(_campo(settings, usuario, "nome_cripto"))
+    except ErroCriptografia:
+        return False
+
+
+def _filtros_do_log(
+    filtros: FiltrosUsuario, cpf_hash: bytes | None, termo_nome: str | None
+) -> dict[str, Any]:
+    # O termo pesquisado é dado pessoal: o log só registra que houve busca por nome.
+    registro: dict[str, Any] = {}
+    if filtros.grupo is not None:
+        registro["grupo"] = filtros.grupo
+    if filtros.id_unidade is not None:
+        registro["id_unidade"] = filtros.id_unidade
+    if termo_nome is not None:
+        registro["busca"] = "nome"
+    if cpf_hash is not None:
+        registro["busca"] = "cpf"
+        registro["usuario_alvo"] = cpf_hash.hex()[:12]
+    return registro
+
+
+def _resumo(
+    settings: Settings, usuario: Usuario, grupos: list[str], unidade_nome: str | None
+) -> ResumoUsuario:
     try:
         cpf: str | None = _campo(settings, usuario, "cpf_cripto")
         nome: str | None = _campo(settings, usuario, "nome_cripto")
     except ErroCriptografia:
         cpf = nome = None
     return ResumoUsuario(
-        id_publico=usuario.id_publico, cpf=cpf, nome=nome, status=usuario.status, grupos=grupos
+        id_publico=usuario.id_publico,
+        cpf=cpf,
+        nome=nome,
+        status=usuario.status,
+        grupos=grupos,
+        unidade_nome=unidade_nome,
     )
 
 

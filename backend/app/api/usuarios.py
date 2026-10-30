@@ -31,6 +31,7 @@ from app.services.gestao_usuario import (
     Alteracoes,
     DadosUsuario,
     ErroAlteracao,
+    FiltrosUsuario,
     NovoCadastro,
     OperacaoProibida,
 )
@@ -83,7 +84,7 @@ def _detalhe(dados: DadosUsuario) -> UsuarioDetalhe:
     "/lista",
     dependencies=[Depends(limitar(limite_svc.LISTA_USUARIO))],
     response_model=UsuarioListaResposta,
-    responses=ERROS,
+    responses={**ERROS, status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": ErroResposta}},
 )
 def listar(
     dados: UsuarioListaEntrada,
@@ -92,8 +93,12 @@ def listar(
     settings: Config,
     ctx: Ctx,
     response: Response,
-) -> UsuarioListaResposta:
-    pagina = gestao_usuario.listar(db, settings, dados.depois, atual.cpf_hash, ctx)
+) -> UsuarioListaResposta | JSONResponse:
+    filtros = FiltrosUsuario(grupo=dados.grupo, id_unidade=dados.id_unidade, busca=dados.busca)
+    try:
+        pagina = gestao_usuario.listar(db, settings, filtros, dados.depois, atual.cpf_hash, ctx)
+    except GrupoNaoEncontrado:
+        return erro(status.HTTP_422_UNPROCESSABLE_CONTENT, GRUPO_INVALIDO)
     response.headers.update(SEM_CACHE)
     return UsuarioListaResposta(
         itens=[
@@ -103,6 +108,7 @@ def listar(
                 nome=item.nome,
                 status=item.status,
                 grupos=item.grupos,
+                unidade_nome=item.unidade_nome,
             )
             for item in pagina.itens
         ],

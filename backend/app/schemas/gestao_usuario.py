@@ -2,13 +2,26 @@ import uuid
 from datetime import datetime
 from typing import Annotated, Self
 
-from pydantic import BaseModel, ConfigDict, Field, PositiveInt, StringConstraints, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    PositiveInt,
+    StringConstraints,
+    model_validator,
+)
 
 from app.schemas.paciente import Email
-from app.schemas.validadores import Cpf, Nome
+from app.schemas.validadores import Cpf, Nome, sem_controle
 
 NomeGrupo = Annotated[str, StringConstraints(min_length=1, max_length=60)]
 Grupos = Annotated[list[NomeGrupo], Field(max_length=20)]
+BuscaUsuario = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=2, max_length=150),
+    AfterValidator(sem_controle),
+]
 
 
 class _Entrada(BaseModel):
@@ -16,7 +29,12 @@ class _Entrada(BaseModel):
 
 
 class UsuarioListaEntrada(_Entrada):
+    """Filtros opcionais, no corpo: nome e CPF não podem ir para a URL."""
+
     depois: uuid.UUID | None = None
+    grupo: NomeGrupo | None = None
+    id_unidade: Annotated[int, Field(ge=1, le=2_147_483_647)] | None = None
+    busca: BuscaUsuario | None = Field(default=None, repr=False)
 
 
 class UsuarioNovo(_Entrada):
@@ -56,6 +74,7 @@ class UsuarioResumo(BaseModel):
     nome: str | None
     status: str
     grupos: list[str]
+    unidade_nome: str | None
 
 
 class UsuarioListaResposta(BaseModel):
