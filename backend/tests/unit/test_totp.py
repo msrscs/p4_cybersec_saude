@@ -38,6 +38,8 @@ def test_uri_sem_dado_pessoal_e_com_parametros_padrao() -> None:
 def test_qr_svg() -> None:
     svg = totp.qr_svg(totp.uri_provisionamento(totp.gerar_segredo()))
     assert svg.startswith("<svg") and svg.rstrip().endswith("</svg>")
+    # Sem o namespace o navegador não decodifica o SVG em <img> (a tela usa data: URL).
+    assert 'xmlns="http://www.w3.org/2000/svg"' in svg
     assert "<script" not in svg
 
 

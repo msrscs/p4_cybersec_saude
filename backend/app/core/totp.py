@@ -5,6 +5,7 @@ ao último aceito: um código já usado não vale de novo, nem dentro da mesma j
 """
 
 import hmac
+import io
 from datetime import datetime
 
 import pyotp
@@ -28,7 +29,13 @@ def uri_provisionamento(segredo: str) -> str:
 
 
 def qr_svg(uri: str) -> str:
-    return segno.make(uri, error="m").svg_inline(scale=5, dark="#0f1b2d", light="#ffffff")
+    # Documento SVG completo, não svg_inline: a tela o exibe em <img>, e sem o xmlns o navegador
+    # não decodifica a imagem.
+    saida = io.BytesIO()
+    segno.make(uri, error="m").save(
+        saida, kind="svg", xmldecl=False, nl=False, scale=5, dark="#0f1b2d", light="#ffffff"
+    )
+    return saida.getvalue().decode()
 
 
 def passo(agora: datetime) -> int:

@@ -69,7 +69,10 @@ test('primeiro acesso: cadastro do MFA e códigos de recuperação', async () =>
   await page.getByRole('button', { name: 'Entrar' }).click();
 
   await expect(page.getByRole('heading', { name: 'Configure o autenticador' })).toBeVisible();
-  await expect(page.locator('#qr-imagem')).toHaveAttribute('src', /^data:image\/svg\+xml/);
+  const qr = page.locator('#qr-imagem');
+  await expect(qr).toHaveAttribute('src', /^data:image\/svg\+xml/);
+  // A imagem precisa ter sido decodificada de fato, não só ter o atributo src.
+  await expect.poll(() => qr.evaluate((img) => img.naturalWidth)).toBeGreaterThan(0);
   chave = (await page.locator('#qr-chave').textContent()).replace(/\s/g, '');
 
   const cadastro = page.locator('#etapa-cadastro');
