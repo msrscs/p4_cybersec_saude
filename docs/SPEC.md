@@ -90,16 +90,16 @@ Serviços (Consulta Ortopédia, Consulta Oncologista, Exame Sangue, Exame Mamogr
 
 **RF-12 Cadastro OCI e Navegação**
 OCI, Navegação (Marcação dos serviçso de saúde).
-- [ ] Tabela: [oci] Campos: [id_oci, id_tipo_oci, cpf_paciente_hash, data_criacao, cid_hash, fk_tipo_oci_id_tipo_oci, resultado, resultado_cid_hash, status]
-- [ ] Tabela: [oci_navegacao] Campos: [id_oci_navegacao, id_oci, id_unidade, id_servico, data_hora, status]
-- [ ] CRUD
+- [x] Tabela: [oci] Campos: [id_oci, id_tipo_oci, cpf_paciente_hash, data_criacao, cid_hash, fk_tipo_oci_id_tipo_oci, resultado, resultado_cid_hash, status]
+- [x] Tabela: [oci_navegacao] Campos: [id_oci_navegacao, id_oci, id_unidade, id_servico, data_hora, status]
+- [x] CRUD (exclusão lógica, com alcance por unidade — ADR-0025)
 
 **RF-13 Relacionamentos das Tabelas**
 Relacionamentos.
 - [ ] Tabela: [papel_permissao] Campos: [fk_papel_id_papel, fk_permissao_id_permissao]
 - [ ] Tabela: [grupo_papel] Campos: [fk_grupo_id_grupo, fk_papel_id_papel]
 - [ ] Tabela: [usuario_grupo] Campos: [fk_usuario_cpf_hash, fk_grupo_id_grupo]
-- [ ] Tabela: [log_oci] Campos: [fk_log_id_log, fk_oci_id_oci]
+- [x] Relação log x OCI pela coluna `log.id_oci`, sem tabela `log_oci` (ADR-0025)
 - [x] Tabela: [tipo_oci_cid] Campos: [fk_tipo_oci_tipo_oci_id, fk_cid_cid_hash]
 - [x] Tabela: [unidade_saude_servico_saude] Campos: [fk_unidade_saude_id_unidade, fk_servico_saude_id_servico]
 - [ ] Tabela: [cid_servico_saude] Campos: [fk_cid_cid_hash, fk_servico_saude_id_servico]
