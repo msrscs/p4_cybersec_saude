@@ -105,6 +105,12 @@ Relacionamentos.
 - [x] Tabela: [unidade_saude_servico_saude] Campos: [fk_unidade_saude_id_unidade, fk_servico_saude_id_servico]
 - [x] Tabela: [cid_servico_saude] Campos: [fk_cid_cid_hash, fk_servico_saude_id_servico]
 
+**RF-14 Dashboard de OCI**
+Como gestor ou navegador, quero ver gráficos e métricas das OCIs do meu alcance.
+- [x] Primeiro item do menu e tela inicial de quem tem `oci:ler` (ADR-0027)
+- [x] Só agregados, com o mesmo alcance por unidade da lista de OCIs
+- [x] Filtros por período, tipo e unidade; consulta registrada no log
+
 ## 4. Requisitos não funcionais / segurança
 | ID | Requisito | Verificação |
 |---|---|---|
