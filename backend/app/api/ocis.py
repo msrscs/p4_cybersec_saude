@@ -18,6 +18,8 @@ from app.models import Cid, Oci
 from app.schemas.auth import ErroResposta
 from app.schemas.oci import (
     CidResumo,
+    DashboardEntrada,
+    DashboardResposta,
     DiaComVagas,
     DiasComVagas,
     EtapaAlteracao,
@@ -40,6 +42,7 @@ from app.schemas.oci import (
     UnidadesQueAtendem,
 )
 from app.services import agenda as agenda_service
+from app.services import dashboard_oci as dashboard_service
 from app.services import limite as limite_svc
 from app.services import oci as oci_service
 from app.services.agenda import FUSO, HorarioIndisponivel
@@ -205,6 +208,23 @@ def horarios_com_vagas(
             )
         ]
     )
+
+
+@router.post(
+    "/dashboard",
+    dependencies=[Depends(limitar(limite_svc.LISTA_OCI))],
+    response_model=DashboardResposta,
+    responses=ERROS,
+)
+def dashboard(
+    dados: DashboardEntrada, atual: Leitor, db: Db, ctx: Ctx, response: Response
+) -> DashboardResposta:
+    filtros = dashboard_service.FiltrosDashboard(
+        dias=dados.dias, id_tipo_oci=dados.id_tipo_oci, id_unidade=dados.id_unidade
+    )
+    resultado = dashboard_service.montar(db, filtros, atual.cpf_hash, ctx, agora())
+    response.headers.update(SEM_CACHE)
+    return DashboardResposta.model_validate(resultado)
 
 
 @router.post(

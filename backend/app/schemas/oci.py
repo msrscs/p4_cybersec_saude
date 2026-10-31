@@ -62,6 +62,14 @@ class OciListaEntrada(_Entrada):
     atrasadas: bool = False
 
 
+class DashboardEntrada(_Entrada):
+    """Período em opções fechadas: o custo da consulta fica limitado (ADR-0027)."""
+
+    dias: Literal[30, 90, 180, 365] = 90
+    id_tipo_oci: IdInteiro | None = None
+    id_unidade: IdInteiro | None = None
+
+
 class OciAlteracao(_Entrada):
     cid: IdCid
 
@@ -172,3 +180,66 @@ class HorarioVago(BaseModel):
 
 class HorariosVagos(BaseModel):
     horarios: list[HorarioVago]
+
+
+class _DoServico(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ResumoAbertasDashboard(_DoServico):
+    em_aberto: int
+    atrasadas: int
+    vencem_em_breve: int
+
+
+class ResumoConclusoesDashboard(_DoServico):
+    concluidas: int
+    no_prazo: int
+    mediana_dias: float | None
+
+
+class PontoDoDashboard(_DoServico):
+    inicio: date
+    abertas: int
+    concluidas: int
+
+
+class OcisDoTipoDashboard(_DoServico):
+    nome: str
+    aberta: int
+    concluida: int
+    cancelada: int
+
+
+class OcisDoCidDashboard(_DoServico):
+    codigo: str
+    descricao: str
+    total: int
+
+
+class EtapasDashboard(_DoServico):
+    nome: str
+    agendado: int
+    realizado: int
+    faltou: int
+    cancelado: int
+    remarcado: int
+
+
+class DashboardResposta(_DoServico):
+    """Só contagens: nenhum campo identifica paciente ou OCI."""
+
+    alcance: Literal["todas", "unidade", "nenhuma"]
+    dias: int
+    abertas: ResumoAbertasDashboard
+    conclusoes: ResumoConclusoesDashboard
+    abertas_no_periodo: int
+    canceladas_no_periodo: int
+    proximas_etapas: int
+    granularidade: Literal["week", "month"]
+    serie: list[PontoDoDashboard]
+    por_tipo: list[OcisDoTipoDashboard]
+    por_cid: list[OcisDoCidDashboard]
+    etapas: EtapasDashboard
+    por_unidade: list[EtapasDashboard]
+    por_servico: list[EtapasDashboard]

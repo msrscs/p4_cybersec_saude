@@ -362,6 +362,9 @@ class Oci(Base):
     kek_versao: Mapped[int | None] = mapped_column(SmallInteger)
     resultado_cid_hash: Mapped[bytes | None] = mapped_column(BYTEA, ForeignKey(Cid.cid_hash))
     status: Mapped[str] = mapped_column(Text, default="aberta")
+    atualizado_em: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=FetchedValue()
+    )
     tipo: Mapped[TipoOci] = relationship(lazy="selectin")
     cid: Mapped[Cid] = relationship(foreign_keys=[cid_hash], lazy="selectin")
     resultado_cid: Mapped[Cid | None] = relationship(

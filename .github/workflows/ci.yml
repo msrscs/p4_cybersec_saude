@@ -79,7 +79,7 @@ jobs:
       - name: Cobertura mínima nos módulos críticos (OCI)
         run: >-
           uv run coverage report --fail-under=90
-          --include="app/services/oci.py,app/repositories/oci.py,app/api/ocis.py,app/schemas/oci.py,app/services/agenda.py,app/repositories/agenda.py"
+          --include="app/services/oci.py,app/repositories/oci.py,app/api/ocis.py,app/schemas/oci.py,app/services/agenda.py,app/repositories/agenda.py,app/services/dashboard_oci.py,app/repositories/dashboard_oci.py"
       - name: Cobertura mínima nos módulos críticos (cadastros)
         run: >-
           uv run coverage report --fail-under=90

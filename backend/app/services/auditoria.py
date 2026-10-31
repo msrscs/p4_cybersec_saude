@@ -43,6 +43,7 @@ class Evento(StrEnum):
     OCI_UPDATED = "oci_updated"
     OCI_CONCLUDED = "oci_concluded"
     OCI_CANCELED = "oci_canceled"
+    OCI_DASHBOARD_READ = "oci_dashboard_read"
     NAVIGATION_CREATED = "navigation_created"
     NAVIGATION_UPDATED = "navigation_updated"
     NAVIGATION_RESCHEDULED = "navigation_rescheduled"
