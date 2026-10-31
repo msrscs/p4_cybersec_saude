@@ -5,7 +5,7 @@ revelar que ela existe.
 """
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Path, Response, status
@@ -18,11 +18,15 @@ from app.models import Cid, Oci
 from app.schemas.auth import ErroResposta
 from app.schemas.oci import (
     CidResumo,
+    DiaComVagas,
+    DiasComVagas,
     EtapaAlteracao,
     EtapaNova,
+    EtapaRemarcacao,
     EtapaResposta,
+    HorariosVagos,
+    HorarioVago,
     ListaDeCids,
-    ListaDeServicos,
     OciAlteracao,
     OciConclusao,
     OciDetalhe,
@@ -32,9 +36,13 @@ from app.schemas.oci import (
     OciPagina,
     OciResumo,
     OpcaoSimples,
+    UnidadeQueAtende,
+    UnidadesQueAtendem,
 )
+from app.services import agenda as agenda_service
 from app.services import limite as limite_svc
 from app.services import oci as oci_service
+from app.services.agenda import FUSO, HorarioIndisponivel
 from app.services.autorizacao import Permissao
 from app.services.cadastro import CidInvalido, ServicoInvalido, TipoInvalido, UnidadeInvalida
 from app.services.oci import (
@@ -59,6 +67,7 @@ Editor = Annotated[SessaoAtual, Depends(exigir(Permissao.OCI_EDITAR))]
 Conclusor = Annotated[SessaoAtual, Depends(exigir(Permissao.OCI_CONCLUIR))]
 IdInteiro = Annotated[int, Path(ge=1, le=2_147_483_647)]
 IdEtapa = Annotated[int, Path(ge=1, le=2**63 - 1)]
+IdCid = Annotated[str, Path(pattern=r"^[0-9a-f]{64}$")]
 ERROS: dict[int | str, dict[str, Any]] = {
     codigo: {"model": ErroResposta}
     for codigo in (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN)
@@ -70,7 +79,8 @@ ERROS_ALVO: dict[int | str, dict[str, Any]] = {
     status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": ErroResposta},
 }
 _INVALIDOS = (PacienteIndisponivel, TipoInvalido, CidInvalido, UnidadeInvalida, ServicoInvalido)
-_CONFLITOS = (OciDuplicada, OciEncerrada, NavegacaoEncerrada)
+_CONFLITOS = (OciDuplicada, OciEncerrada, NavegacaoEncerrada, HorarioIndisponivel)
+_ETAPA_INVALIDA = (UnidadeInvalida, ServicoInvalido)
 
 
 def _cid(registro: Cid) -> CidResumo:
@@ -88,7 +98,14 @@ def _resumo(oci: Oci, pessoa: DadosPessoais, instante: datetime) -> OciResumo:
         data_criacao=oci.data_criacao,
         prazo_em=oci.prazo_em,
         atrasada=oci.status == "aberta" and oci.prazo_em < instante,
+        dias_restantes=_dias_restantes(oci, instante),
     )
+
+
+def _dias_restantes(oci: Oci, instante: datetime) -> int | None:
+    if oci.status != "aberta":
+        return None
+    return (oci.prazo_em.astimezone(FUSO).date() - agenda_service.hoje(instante)).days
 
 
 def _detalhe(dados: DetalheOci, instante: datetime) -> OciDetalhe:
@@ -137,14 +154,55 @@ def cids_do_tipo(id_tipo_oci: IdInteiro, _atual: Leitor, db: Db) -> ListaDeCids:
     return ListaDeCids(cids=[_cid(c) for c in oci_service.cids_do_tipo(db, id_tipo_oci)])
 
 
+@router.get("/opcoes/cids/{id_cid}/unidades", response_model=UnidadesQueAtendem, responses=ERROS)
+def unidades_que_atendem(id_cid: IdCid, _atual: Leitor, db: Db) -> UnidadesQueAtendem:
+    """Unidades que oferecem um serviço deste CID e têm agenda para ele."""
+    return UnidadesQueAtendem(
+        unidades=[
+            UnidadeQueAtende(
+                id=item.unidade.id_unidade,
+                nome=item.unidade.nome,
+                servicos=[OpcaoSimples(id=s.id_servico, nome=s.nome) for s in item.servicos],
+            )
+            for item in agenda_service.unidades_que_atendem(db, bytes.fromhex(id_cid))
+        ]
+    )
+
+
 @router.get(
-    "/opcoes/unidades/{id_unidade}/servicos", response_model=ListaDeServicos, responses=ERROS
+    "/opcoes/unidades/{id_unidade}/servicos/{id_servico}/dias",
+    response_model=DiasComVagas,
+    responses=ERROS,
 )
-def servicos_da_unidade(id_unidade: IdInteiro, _atual: Leitor, db: Db) -> ListaDeServicos:
-    return ListaDeServicos(
-        servicos=[
-            OpcaoSimples(id=s.id_servico, nome=s.nome)
-            for s in oci_service.servicos_da_unidade(db, id_unidade)
+def dias_com_vagas(
+    id_unidade: IdInteiro, id_servico: IdInteiro, _atual: Leitor, db: Db
+) -> DiasComVagas:
+    return DiasComVagas(
+        dias=[
+            DiaComVagas(data=dia.data, vagas=dia.vagas)
+            for dia in agenda_service.dias_com_vagas(db, id_unidade, id_servico, agora())
+        ]
+    )
+
+
+@router.get(
+    "/opcoes/unidades/{id_unidade}/servicos/{id_servico}/dias/{dia}/horarios",
+    response_model=HorariosVagos,
+    responses=ERROS,
+)
+def horarios_com_vagas(
+    id_unidade: IdInteiro, id_servico: IdInteiro, dia: date, _atual: Leitor, db: Db
+) -> HorariosVagos:
+    return HorariosVagos(
+        horarios=[
+            HorarioVago(
+                data_hora=horario.data_hora,
+                hora=horario.data_hora.strftime("%H:%M"),
+                vagas=horario.vagas,
+            )
+            for horario in agenda_service.horarios_com_vagas(
+                db, id_unidade, id_servico, dia, agora()
+            )
         ]
     )
 
@@ -198,7 +256,7 @@ def abrir(
         return erro(status.HTTP_403_FORBIDDEN, "Acesso negado.")
     except _INVALIDOS as exc:
         return erro(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc))
-    except OciDuplicada as exc:
+    except (OciDuplicada, HorarioIndisponivel) as exc:
         return erro(status.HTTP_409_CONFLICT, str(exc))
     response.headers.update(SEM_CACHE)
     return _detalhe(criada, instante)
@@ -290,10 +348,11 @@ def incluir_etapa(
             dados.data_hora,
             atual.cpf_hash,
             ctx,
+            agora(),
         )
-    except (UnidadeInvalida, ServicoInvalido) as exc:
+    except _ETAPA_INVALIDA as exc:
         return erro(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc))
-    except OciEncerrada as exc:
+    except (OciEncerrada, HorarioIndisponivel) as exc:
         return erro(status.HTTP_409_CONFLICT, str(exc))
     return _responder(resultado, response)
 
@@ -310,11 +369,48 @@ def alterar_etapa(
     response: Response,
 ) -> OciDetalhe | JSONResponse:
     try:
-        resultado = oci_service.alterar_etapa(
-            db, settings, id_oci, id_etapa, dados.status, dados.data_hora, atual.cpf_hash, ctx
+        resultado = oci_service.marcar_etapa(
+            db, settings, id_oci, id_etapa, dados.status, atual.cpf_hash, ctx
         )
     except ForaDoAlcance:
         return erro(status.HTTP_403_FORBIDDEN, "Acesso negado.")
+    except _CONFLITOS as exc:
+        return erro(status.HTTP_409_CONFLICT, str(exc))
+    return _responder(resultado, response)
+
+
+@router.post(
+    "/{id_oci}/navegacoes/{id_etapa}/remarcar",
+    response_model=OciDetalhe,
+    responses=ERROS_ALVO,
+)
+def remarcar_etapa(
+    id_oci: uuid.UUID,
+    id_etapa: IdEtapa,
+    dados: EtapaRemarcacao,
+    atual: Editor,
+    db: Db,
+    settings: Config,
+    ctx: Ctx,
+    response: Response,
+) -> OciDetalhe | JSONResponse:
+    try:
+        resultado = oci_service.remarcar_etapa(
+            db,
+            settings,
+            id_oci,
+            id_etapa,
+            dados.id_unidade,
+            dados.id_servico,
+            dados.data_hora,
+            atual.cpf_hash,
+            ctx,
+            agora(),
+        )
+    except ForaDoAlcance:
+        return erro(status.HTTP_403_FORBIDDEN, "Acesso negado.")
+    except _ETAPA_INVALIDA as exc:
+        return erro(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc))
     except _CONFLITOS as exc:
         return erro(status.HTTP_409_CONFLICT, str(exc))
     return _responder(resultado, response)

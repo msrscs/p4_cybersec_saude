@@ -14,7 +14,8 @@ from sqlalchemy.orm import InstrumentedAttribute, Session
 
 from app.core.config import Settings
 from app.core.crypto import FinalidadeHash, hash_busca
-from app.models import Cid, ServicoSaude, TipoOci, TipoUnidade, UnidadeSaude
+from app.models import AgendaServico, Cid, ServicoSaude, TipoOci, TipoUnidade, UnidadeSaude
+from app.repositories import agenda as agenda_repo
 from app.repositories import cadastro as cadastro_repo
 from app.repositories.cadastro import Chave, Ordem, Registro
 from app.services import auditoria
@@ -35,9 +36,19 @@ class CadastroEmUso(Exception):
     """A mensagem é exibida ao administrador e diz o que fazer antes de inativar."""
 
 
+class AgendaSobreposta(Exception):
+    def __init__(self) -> None:
+        super().__init__("Já existe agenda neste horário para esta unidade e serviço.")
+
+
 class CidInvalido(Exception):
     def __init__(self) -> None:
         super().__init__("CID inválido.")
+
+
+class AgendaInvalida(Exception):
+    def __init__(self) -> None:
+        super().__init__("O horário final deve ser depois do inicial e caber um atendimento.")
 
 
 class ServicoInvalido(Exception):
@@ -90,6 +101,15 @@ SERVICOS = Catalogo(
     _contem(ServicoSaude.nome, ServicoSaude.descricao),
 )
 CIDS = Catalogo("cid", Cid, Cid.cid, _contem(Cid.cid, Cid.descricao))
+AGENDAS = Catalogo(
+    "agenda_servico",
+    AgendaServico,
+    AgendaServico.id_agenda,
+    lambda termo: or_(
+        AgendaServico.unidade.has(_contem(UnidadeSaude.nome)(termo)),
+        AgendaServico.servico.has(_contem(ServicoSaude.nome)(termo)),
+    ),
+)
 TIPOS_OCI = Catalogo("tipo_oci", TipoOci, func.lower(TipoOci.tipo_oci), _contem(TipoOci.tipo_oci))
 
 
@@ -204,10 +224,73 @@ def criar_unidade(
 def criar_servico(
     db: Session, valores: dict[str, Any], autor: bytes, ctx: ContextoRequisicao
 ) -> ServicoSaude:
-    registro = ServicoSaude(**valores)
+    campos = dict(valores)
+    cids = {bytes.fromhex(c) for c in campos.pop("cids", ())}
+    _validar_cids_ativos(db, cids)
+    registro = ServicoSaude(**campos)
     _inserir(db, registro)
-    _auditar(db, Evento.CATALOG_CREATED, SERVICOS, registro.id_servico, autor, ctx)
+    cadastro_repo.incluir_cids_no_servico(db, registro.id_servico, cids)
+    db.refresh(registro)
+    extra = {"cids_adicionados": cadastro_repo.codigos_dos_cids(db, cids)} if cids else None
+    _auditar(db, Evento.CATALOG_CREATED, SERVICOS, registro.id_servico, autor, ctx, extra=extra)
     return registro
+
+
+def atualizar_servico(
+    db: Session,
+    chave: int,
+    alteracoes: dict[str, Any],
+    autor: bytes,
+    ctx: ContextoRequisicao,
+) -> ServicoSaude | None:
+    atual = cadastro_repo.buscar(db, ServicoSaude, chave, travar=True)
+    if atual is None:
+        return None
+    campos = dict(alteracoes)
+    extra = None
+    if "cids" in campos:
+        extra = _aplicar_cids_do_servico(db, chave, {bytes.fromhex(c) for c in campos.pop("cids")})
+    if not campos and extra is None:
+        return atual  # só CIDs, e nada mudou: sem evento
+    return atualizar(db, SERVICOS, chave, campos, autor, ctx, extra=extra)
+
+
+def criar_agenda(
+    db: Session, valores: dict[str, Any], autor: bytes, ctx: ContextoRequisicao
+) -> AgendaServico:
+    _validar_agenda(db, valores, exceto=None)
+    registro = AgendaServico(**valores)
+    _inserir(db, registro)
+    _auditar(db, Evento.CATALOG_CREATED, AGENDAS, registro.id_agenda, autor, ctx)
+    return registro
+
+
+def atualizar_agenda(
+    db: Session,
+    chave: int,
+    alteracoes: dict[str, Any],
+    autor: bytes,
+    ctx: ContextoRequisicao,
+) -> AgendaServico | None:
+    """Valida o resultado final: os campos enviados somados aos que já estão gravados."""
+    atual = cadastro_repo.buscar(db, AgendaServico, chave, travar=True)
+    if atual is None:
+        return None
+    final = {
+        campo: alteracoes.get(campo, getattr(atual, campo))
+        for campo in (
+            "id_unidade",
+            "id_servico",
+            "dia_semana",
+            "hora_inicio",
+            "hora_fim",
+            "duracao_minutos",
+        )
+    }
+    if final["hora_inicio"] >= final["hora_fim"]:
+        raise AgendaInvalida
+    _validar_agenda(db, final, exceto=chave)
+    return atualizar(db, AGENDAS, chave, alteracoes, autor, ctx)
 
 
 def criar_cid(
@@ -394,12 +477,52 @@ def _aplicar_cids(db: Session, id_tipo_oci: int, desejados: set[bytes]) -> dict[
     }
 
 
+def _aplicar_cids_do_servico(
+    db: Session, id_servico: int, desejados: set[bytes]
+) -> dict[str, Any] | None:
+    atuais = cadastro_repo.hashes_de_cids_do_servico(db, id_servico)
+    adicionados, removidos = desejados - atuais, atuais - desejados
+    if not adicionados and not removidos:
+        return None
+    _validar_cids_ativos(db, adicionados)
+    cadastro_repo.incluir_cids_no_servico(db, id_servico, adicionados)
+    if removidos:
+        cadastro_repo.remover_cids_do_servico(db, id_servico, removidos)
+    return {
+        "cids_adicionados": cadastro_repo.codigos_dos_cids(db, adicionados),
+        "cids_removidos": cadastro_repo.codigos_dos_cids(db, removidos),
+    }
+
+
+def _validar_agenda(db: Session, valores: dict[str, Any], *, exceto: int | None) -> None:
+    unidade = cadastro_repo.buscar(db, UnidadeSaude, valores["id_unidade"])
+    if unidade is None or unidade.status != "ativo":
+        raise UnidadeInvalida
+    if not cadastro_repo.servico_na_unidade(db, valores["id_unidade"], valores["id_servico"]):
+        raise ServicoInvalido
+    minutos = (
+        valores["hora_fim"].hour * 60
+        + valores["hora_fim"].minute
+        - valores["hora_inicio"].hour * 60
+        - valores["hora_inicio"].minute
+    )
+    if minutos < valores["duracao_minutos"]:
+        raise AgendaInvalida
+    for outra in agenda_repo.outras_agendas_no_dia(
+        db, valores["id_unidade"], valores["id_servico"], valores["dia_semana"], exceto
+    ):
+        if valores["hora_inicio"] < outra.hora_fim and outra.hora_inicio < valores["hora_fim"]:
+            raise AgendaSobreposta
+
+
 def _garantir_sem_uso(db: Session, registro: Registro) -> None:
     # OCI em andamento depende destes cadastros (ADR-0025).
     if isinstance(registro, TipoOci) and cadastro_repo.ocis_abertas_do_tipo(
         db, registro.id_tipo_oci
     ):
         raise CadastroEmUso("Há OCIs abertas deste tipo: encerre-as antes de inativar.")
+    if isinstance(registro, Cid) and cadastro_repo.servicos_ativos_com_cid(db, registro.cid_hash):
+        raise CadastroEmUso("Há serviços ativos com este CID: remova-o deles antes de inativar.")
     if isinstance(registro, Cid) and cadastro_repo.ocis_abertas_com_cid(db, registro.cid_hash):
         raise CadastroEmUso("Há OCIs abertas com este CID: encerre-as antes de inativar.")
     if isinstance(registro, UnidadeSaude) and cadastro_repo.etapas_agendadas_na_unidade(
@@ -463,6 +586,8 @@ def _identificador(registro: Registro) -> int | str:
         return registro.id_servico
     if isinstance(registro, TipoOci):
         return registro.id_tipo_oci
+    if isinstance(registro, AgendaServico):
+        return registro.id_agenda
     return registro.cid
 
 

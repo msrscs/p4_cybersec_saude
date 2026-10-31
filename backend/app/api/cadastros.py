@@ -7,10 +7,14 @@ from fastapi.responses import JSONResponse
 
 from app.api.auth import SEM_CACHE, Config, Ctx, erro
 from app.api.deps import Db, exigir, limitar
-from app.models import Cid, ServicoSaude, TipoOci, TipoUnidade, UnidadeSaude
+from app.models import AgendaServico, Cid, ServicoSaude, TipoOci, TipoUnidade, UnidadeSaude
 from app.repositories.cadastro import Chave, Registro
 from app.schemas.auth import ErroResposta
 from app.schemas.cadastro import (
+    AgendaAlteracao,
+    AgendaNova,
+    AgendaResposta,
+    AgendasPagina,
     CidAlteracao,
     CidNovo,
     CidOpcao,
@@ -42,12 +46,15 @@ from app.services import cadastro
 from app.services import limite as limite_svc
 from app.services.autorizacao import Permissao
 from app.services.cadastro import (
+    AgendaInvalida,
+    AgendaSobreposta,
     CadastroDuplicado,
     CadastroEmUso,
     Catalogo,
     CidInvalido,
     ServicoInvalido,
     TipoInvalido,
+    UnidadeInvalida,
 )
 from app.services.sessao import SessaoAtual
 
@@ -97,6 +104,23 @@ def _servico(registro: ServicoSaude) -> ServicoResposta:
         id=registro.id_servico,
         nome=registro.nome,
         descricao=registro.descricao,
+        status=registro.status,
+        cids=[_opcao_de_cid(c) for c in registro.cids],
+    )
+
+
+def _agenda(registro: AgendaServico) -> AgendaResposta:
+    return AgendaResposta(
+        id=registro.id_agenda,
+        id_unidade=registro.id_unidade,
+        unidade=registro.unidade.nome,
+        id_servico=registro.id_servico,
+        servico=registro.servico.nome,
+        dia_semana=registro.dia_semana,
+        hora_inicio=registro.hora_inicio.strftime("%H:%M"),
+        hora_fim=registro.hora_fim.strftime("%H:%M"),
+        duracao_minutos=registro.duracao_minutos,
+        vagas_por_horario=registro.vagas_por_horario,
         status=registro.status,
     )
 
@@ -311,16 +335,25 @@ def criar_servico(
         return _servico(cadastro.criar_servico(db, dados.model_dump(), atual.cpf_hash, ctx))
     except CadastroDuplicado as exc:
         return erro(status.HTTP_409_CONFLICT, str(exc))
+    except CidInvalido as exc:
+        return erro(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc))
 
 
 @router.patch("/servicos/{id_servico}", response_model=ServicoResposta, responses=ERROS_ALVO)
 def alterar_servico(
     id_servico: IdInteiro, dados: ServicoAlteracao, atual: Gestor, db: Db, ctx: Ctx
 ) -> ServicoResposta | JSONResponse:
-    resultado = _alterar(
-        cadastro.SERVICOS, id_servico, dados.model_dump(exclude_unset=True), atual, db, ctx
-    )
-    return resultado if isinstance(resultado, JSONResponse) else _servico(resultado)
+    try:
+        registro = cadastro.atualizar_servico(
+            db, id_servico, dados.model_dump(exclude_unset=True), atual.cpf_hash, ctx
+        )
+    except CadastroDuplicado as exc:
+        return erro(status.HTTP_409_CONFLICT, str(exc))
+    except CidInvalido as exc:
+        return erro(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc))
+    if registro is None:
+        return erro(status.HTTP_404_NOT_FOUND, NAO_ENCONTRADO)
+    return _servico(registro)
 
 
 @router.delete(
@@ -446,3 +479,63 @@ def inativar_tipo_oci(id_tipo_oci: IdInteiro, atual: Gestor, db: Db, ctx: Ctx) -
 )
 def reativar_tipo_oci(id_tipo_oci: IdInteiro, atual: Gestor, db: Db, ctx: Ctx) -> Response:
     return _status(cadastro.TIPOS_OCI, id_tipo_oci, True, atual, db, ctx)
+
+
+# --- Agendas de atendimento --------------------------------------------------------------
+
+_ERROS_DE_AGENDA = (UnidadeInvalida, ServicoInvalido, AgendaInvalida)
+
+
+@router.post("/agendas/lista", response_model=AgendasPagina, responses=ERROS)
+def listar_agendas(dados: ListaEntrada, _atual: Leitor, db: Db) -> AgendasPagina:
+    pagina = cadastro.listar(db, cadastro.AGENDAS, dados.busca, dados.pagina)
+    return AgendasPagina(itens=[_agenda(r) for r in pagina.itens], tem_mais=pagina.tem_mais)
+
+
+@router.post(
+    "/agendas",
+    status_code=status.HTTP_201_CREATED,
+    response_model=AgendaResposta,
+    responses=ERROS_ALVO,
+)
+def criar_agenda(
+    dados: AgendaNova, atual: Gestor, db: Db, ctx: Ctx
+) -> AgendaResposta | JSONResponse:
+    try:
+        return _agenda(cadastro.criar_agenda(db, dados.model_dump(), atual.cpf_hash, ctx))
+    except AgendaSobreposta as exc:
+        return erro(status.HTTP_409_CONFLICT, str(exc))
+    except _ERROS_DE_AGENDA as exc:
+        return erro(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc))
+
+
+@router.patch("/agendas/{id_agenda}", response_model=AgendaResposta, responses=ERROS_ALVO)
+def alterar_agenda(
+    id_agenda: IdInteiro, dados: AgendaAlteracao, atual: Gestor, db: Db, ctx: Ctx
+) -> AgendaResposta | JSONResponse:
+    try:
+        registro = cadastro.atualizar_agenda(
+            db, id_agenda, dados.model_dump(exclude_unset=True), atual.cpf_hash, ctx
+        )
+    except AgendaSobreposta as exc:
+        return erro(status.HTTP_409_CONFLICT, str(exc))
+    except _ERROS_DE_AGENDA as exc:
+        return erro(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc))
+    if registro is None:
+        return erro(status.HTTP_404_NOT_FOUND, NAO_ENCONTRADO)
+    return _agenda(registro)
+
+
+@router.delete("/agendas/{id_agenda}", status_code=status.HTTP_204_NO_CONTENT, responses=ERROS_ALVO)
+def inativar_agenda(id_agenda: IdInteiro, atual: Gestor, db: Db, ctx: Ctx) -> Response:
+    """Inativar não desfaz o que já foi marcado: só deixa de oferecer novos horários."""
+    return _status(cadastro.AGENDAS, id_agenda, False, atual, db, ctx)
+
+
+@router.post(
+    "/agendas/{id_agenda}/reativar",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses=ERROS_ALVO,
+)
+def reativar_agenda(id_agenda: IdInteiro, atual: Gestor, db: Db, ctx: Ctx) -> Response:
+    return _status(cadastro.AGENDAS, id_agenda, True, atual, db, ctx)

@@ -1,4 +1,5 @@
 import re
+from datetime import time
 from typing import Annotated, Self
 
 from pydantic import (
@@ -15,6 +16,12 @@ from app.schemas.validadores import Nome, sem_controle
 IdTipo = Annotated[int, Field(ge=1, le=2_147_483_647)]
 IdsServicos = Annotated[list[Annotated[int, Field(ge=1, le=2_147_483_647)]], Field(max_length=1000)]
 _CID = re.compile(r"[A-Z][0-9]{2}(\.[0-9A-Z]{1,2})?")
+
+
+def _sem_fuso(valor: time) -> time:
+    if valor.tzinfo is not None:
+        raise ValueError("Informe a hora local, sem fuso.")
+    return valor.replace(second=0, microsecond=0)
 
 
 def _telefone(valor: str) -> str:
@@ -54,6 +61,10 @@ Busca = Annotated[
 
 
 Prazo = Annotated[int, Field(ge=1, le=3650)]
+DiaSemana = Annotated[int, Field(ge=0, le=6)]
+Duracao = Annotated[int, Field(ge=5, le=480)]
+VagasPorHorario = Annotated[int, Field(ge=1, le=100)]
+Hora = Annotated[time, AfterValidator(_sem_fuso)]
 IdsCids = Annotated[
     list[Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]], Field(max_length=1000)
 ]
@@ -121,13 +132,51 @@ class UnidadeAlteracao(_Parcial):
 class ServicoNovo(_Entrada):
     nome: Nome
     descricao: Descricao = ""
+    cids: IdsCids = []
 
 
 class ServicoAlteracao(_Parcial):
-    _obrigatorios = ("nome", "descricao")
+    _obrigatorios = ("nome", "descricao", "cids")
 
     nome: Nome | None = None
     descricao: Descricao | None = None
+    cids: IdsCids | None = None
+
+
+class AgendaNova(_Entrada):
+    id_unidade: IdTipo
+    id_servico: IdTipo
+    dia_semana: DiaSemana
+    hora_inicio: Hora
+    hora_fim: Hora
+    duracao_minutos: Duracao
+    vagas_por_horario: VagasPorHorario
+
+    @model_validator(mode="after")
+    def _ordem_dos_horarios(self) -> Self:
+        if self.hora_inicio >= self.hora_fim:
+            raise ValueError("O horário final deve ser depois do inicial.")
+        return self
+
+
+class AgendaAlteracao(_Parcial):
+    _obrigatorios = (
+        "id_unidade",
+        "id_servico",
+        "dia_semana",
+        "hora_inicio",
+        "hora_fim",
+        "duracao_minutos",
+        "vagas_por_horario",
+    )
+
+    id_unidade: IdTipo | None = None
+    id_servico: IdTipo | None = None
+    dia_semana: DiaSemana | None = None
+    hora_inicio: Hora | None = None
+    hora_fim: Hora | None = None
+    duracao_minutos: Duracao | None = None
+    vagas_por_horario: VagasPorHorario | None = None
 
 
 class CidNovo(_Entrada):
@@ -184,11 +233,38 @@ class UnidadeResposta(BaseModel):
     servicos: list[Opcao]
 
 
+class CidOpcao(BaseModel):
+    id: str
+    cid: str
+    descricao: str
+    status: str
+
+
 class ServicoResposta(BaseModel):
     id: int
     nome: str
     descricao: str
     status: str
+    cids: list[CidOpcao]
+
+
+class AgendaResposta(BaseModel):
+    id: int
+    id_unidade: int
+    unidade: str
+    id_servico: int
+    servico: str
+    dia_semana: int
+    hora_inicio: str
+    hora_fim: str
+    duracao_minutos: int
+    vagas_por_horario: int
+    status: str
+
+
+class AgendasPagina(BaseModel):
+    itens: list[AgendaResposta]
+    tem_mais: bool
 
 
 class CidResposta(BaseModel):
@@ -201,13 +277,6 @@ class CidResposta(BaseModel):
 class TiposPagina(BaseModel):
     itens: list[TipoResposta]
     tem_mais: bool
-
-
-class CidOpcao(BaseModel):
-    id: str
-    cid: str
-    descricao: str
-    status: str
 
 
 class CidOpcoes(BaseModel):

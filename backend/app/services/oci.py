@@ -24,11 +24,13 @@ from app.core.crypto import (
     gerar_dek,
     hash_busca,
 )
-from app.models import Cid, Oci, OciNavegacao, Paciente, ServicoSaude, TipoOci, UnidadeSaude
+from app.models import Cid, Oci, OciNavegacao, Paciente, TipoOci, UnidadeSaude
+from app.repositories import agenda as agenda_repo
 from app.repositories import cadastro as cadastro_repo
 from app.repositories import oci as oci_repo
 from app.repositories import paciente as paciente_repo
 from app.repositories import usuario as usuario_repo
+from app.services import agenda as agenda_service
 from app.services import auditoria, autorizacao
 from app.services import paciente as paciente_service
 from app.services.auditoria import ContextoRequisicao, Evento
@@ -37,7 +39,6 @@ from app.services.cadastro import CidInvalido, ServicoInvalido, TipoInvalido, Un
 
 TAMANHO_PAGINA = 20
 _TABELA = "oci"
-_SITUACOES_DA_NAVEGACAO = frozenset({"realizado", "faltou", "cancelado"})
 
 
 class PacienteIndisponivel(Exception):
@@ -138,10 +139,6 @@ def cids_do_tipo(db: Session, id_tipo_oci: int) -> list[Cid]:
     return oci_repo.cids_ativos_do_tipo(db, id_tipo_oci)
 
 
-def servicos_da_unidade(db: Session, id_unidade: int) -> list[ServicoSaude]:
-    return oci_repo.servicos_ativos_da_unidade(db, id_unidade)
-
-
 def abrir(
     db: Session,
     settings: Settings,
@@ -164,7 +161,7 @@ def abrir(
         raise TipoInvalido
     if not oci_repo.cid_do_tipo(db, tipo.id_tipo_oci, dados.cid_hash):
         raise CidInvalido
-    _validar_etapa(db, dados.id_unidade, dados.id_servico)
+    _validar_etapa(db, dados.cid_hash, dados.id_unidade, dados.id_servico, dados.data_hora, agora)
 
     oci = Oci(
         id_publico=uuid.uuid4(),
@@ -311,9 +308,10 @@ def concluir(
     oci.kek_versao = dek_cifrada.kek_versao
     oci.resultado_cid_hash = resultado_cid_hash
     oci.status = "concluida"
+    etapas_canceladas = _encerrar_pendentes(oci)
     db.flush()
     db.refresh(oci)
-    _auditar(db, Evento.OCI_CONCLUDED, oci, autor, ctx)
+    _auditar(db, Evento.OCI_CONCLUDED, oci, autor, ctx, etapas_canceladas=etapas_canceladas)
     return _detalhe(settings, db, oci, alcance)
 
 
@@ -330,9 +328,10 @@ def cancelar(
         return None
     _exigir_aberta(oci)
     oci.status = "cancelada"
+    etapas_canceladas = _encerrar_pendentes(oci)
     db.flush()
     db.refresh(oci)
-    _auditar(db, Evento.OCI_CANCELED, oci, autor, ctx)
+    _auditar(db, Evento.OCI_CANCELED, oci, autor, ctx, etapas_canceladas=etapas_canceladas)
     return _detalhe(settings, db, oci, alcance)
 
 
@@ -345,13 +344,14 @@ def incluir_etapa(
     data_hora: datetime,
     autor: bytes,
     ctx: ContextoRequisicao,
+    agora: datetime,
 ) -> DetalheOci | None:
     """Encaminhar para outra unidade é o objetivo da navegação: ela passa a ver esta OCI."""
     oci, alcance = _alcancavel(db, id_publico, autor, ctx, travar=True)
     if oci is None:
         return None
     _exigir_aberta(oci)
-    _validar_etapa(db, id_unidade, id_servico)
+    _validar_etapa(db, oci.cid_hash, id_unidade, id_servico, data_hora, agora)
     oci_repo.inserir_navegacao(
         db,
         OciNavegacao(
@@ -371,36 +371,21 @@ def incluir_etapa(
     return _detalhe(settings, db, oci, alcance)
 
 
-def alterar_etapa(
+def marcar_etapa(
     db: Session,
     settings: Settings,
     id_publico: uuid.UUID,
     id_navegacao: int,
-    status: str | None,
-    data_hora: datetime | None,
+    situacao: str,
     autor: bytes,
     ctx: ContextoRequisicao,
 ) -> DetalheOci | None:
     """Só quem está na unidade da etapa a marca, e só enquanto ela está agendada."""
-    oci, alcance = _alcancavel(db, id_publico, autor, ctx, travar=True)
-    if oci is None:
+    encontrada = _etapa_alcancavel(db, id_publico, id_navegacao, autor, ctx)
+    if encontrada is None:
         return None
-    _exigir_aberta(oci)
-    etapa = oci_repo.buscar_navegacao(db, oci.id_oci, id_navegacao)
-    if etapa is None:
-        return None
-    if not alcance.inclui(etapa.id_unidade):
-        _auditar_fora_do_alcance(db, autor, ctx, resumo={"id_oci": oci.id_oci})
-        raise ForaDoAlcance
-    if etapa.status != "agendado":
-        raise NavegacaoEncerrada
-    campos = []
-    if status is not None:
-        etapa.status = status
-        campos.append("status")
-    if data_hora is not None:
-        etapa.data_hora = data_hora
-        campos.append("data_hora")
+    oci, etapa, alcance = encontrada
+    etapa.status = situacao
     db.flush()
     db.refresh(oci)
     _auditar(
@@ -409,9 +394,47 @@ def alterar_etapa(
         oci,
         autor,
         ctx,
-        campos=campos,
         id_navegacao=id_navegacao,
-        status_etapa=etapa.status,
+        status_etapa=situacao,
+    )
+    return _detalhe(settings, db, oci, alcance)
+
+
+def remarcar_etapa(
+    db: Session,
+    settings: Settings,
+    id_publico: uuid.UUID,
+    id_navegacao: int,
+    id_unidade: int,
+    id_servico: int,
+    data_hora: datetime,
+    autor: bytes,
+    ctx: ContextoRequisicao,
+    agora: datetime,
+) -> DetalheOci | None:
+    """A etapa antiga fica como remarcada e libera a vaga; a nova guarda o horário escolhido."""
+    encontrada = _etapa_alcancavel(db, id_publico, id_navegacao, autor, ctx)
+    if encontrada is None:
+        return None
+    oci, etapa, alcance = encontrada
+    _validar_etapa(db, oci.cid_hash, id_unidade, id_servico, data_hora, agora)
+    etapa.status = "remarcado"
+    oci_repo.inserir_navegacao(
+        db,
+        OciNavegacao(
+            id_oci=oci.id_oci, id_unidade=id_unidade, id_servico=id_servico, data_hora=data_hora
+        ),
+    )
+    db.refresh(oci)
+    _auditar(
+        db,
+        Evento.NAVIGATION_RESCHEDULED,
+        oci,
+        autor,
+        ctx,
+        id_navegacao=id_navegacao,
+        id_unidade=id_unidade,
+        id_servico=id_servico,
     )
     return _detalhe(settings, db, oci, alcance)
 
@@ -448,19 +471,53 @@ def _alcancavel(
     return None, alcance
 
 
+def _etapa_alcancavel(
+    db: Session, id_publico: uuid.UUID, id_navegacao: int, autor: bytes, ctx: ContextoRequisicao
+) -> tuple[Oci, OciNavegacao, Alcance] | None:
+    oci, alcance = _alcancavel(db, id_publico, autor, ctx, travar=True)
+    if oci is None:
+        return None
+    _exigir_aberta(oci)
+    etapa = oci_repo.buscar_navegacao(db, oci.id_oci, id_navegacao)
+    if etapa is None:
+        return None
+    if not alcance.inclui(etapa.id_unidade):
+        _auditar_fora_do_alcance(db, autor, ctx, resumo={"id_oci": oci.id_oci})
+        raise ForaDoAlcance
+    if etapa.status != "agendado":
+        raise NavegacaoEncerrada
+    return oci, etapa, alcance
+
+
+def _encerrar_pendentes(oci: Oci) -> int:
+    """Etapa agendada de OCI encerrada não vai acontecer: libera a vaga."""
+    pendentes = [etapa for etapa in oci.navegacoes if etapa.status == "agendado"]
+    for etapa in pendentes:
+        etapa.status = "cancelado"
+    return len(pendentes)
+
+
 def _exigir_aberta(oci: Oci) -> None:
     if oci.status != "aberta":
         raise OciEncerrada
 
 
-def _validar_etapa(db: Session, id_unidade: int, id_servico: int) -> None:
+def _validar_etapa(
+    db: Session,
+    cid_hash: bytes,
+    id_unidade: int,
+    id_servico: int,
+    data_hora: datetime,
+    agora: datetime,
+) -> None:
+    """A unidade atende a OCI se oferece um serviço do CID; o horário precisa ter vaga."""
     unidade = cadastro_repo.buscar(db, UnidadeSaude, id_unidade)
     if unidade is None or unidade.status != "ativo":
         raise UnidadeInvalida
-    if id_servico not in {
-        s.id_servico for s in oci_repo.servicos_ativos_da_unidade(db, id_unidade)
-    }:
+    oferecidos = {s.id_servico for s in oci_repo.servicos_ativos_da_unidade(db, id_unidade)}
+    if id_servico not in oferecidos or not agenda_repo.servico_do_cid(db, cid_hash, id_servico):
         raise ServicoInvalido
+    agenda_service.reservar(db, id_unidade, id_servico, data_hora, agora)
 
 
 def _dados_pessoais(settings: Settings, paciente: Paciente) -> DadosPessoais:

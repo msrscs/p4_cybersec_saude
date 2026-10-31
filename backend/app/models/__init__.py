@@ -1,7 +1,7 @@
 """Mapeamento ORM das tabelas do schema `app` (a estrutura é definida pelas migrations)."""
 
 import uuid
-from datetime import datetime
+from datetime import datetime, time
 from typing import Any
 
 from sqlalchemy import (
@@ -232,6 +232,13 @@ class ServicoSaude(Base):
     nome: Mapped[str] = mapped_column(Text)
     descricao: Mapped[str] = mapped_column(Text, default="")
     status: Mapped[str] = mapped_column(Text, default="ativo")
+    # Só leitura: os vínculos mudam pelo repositório, para cada mudança ser auditada.
+    cids: Mapped[list["Cid"]] = relationship(  # noqa: UP037 - Cid é definido depois
+        secondary=lambda: CidServico.__table__,
+        viewonly=True,
+        lazy="selectin",
+        order_by="Cid.cid",
+    )
 
 
 class UnidadeServico(Base):
@@ -271,6 +278,31 @@ class Cid(Base):
     cid: Mapped[str] = mapped_column(Text, unique=True)
     descricao: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(Text, default="ativo")
+
+
+class CidServico(Base):
+    __tablename__ = "cid_servico_saude"
+
+    fk_cid_cid_hash: Mapped[bytes] = mapped_column(ForeignKey(Cid.cid_hash), primary_key=True)
+    fk_servico_saude_id_servico: Mapped[int] = mapped_column(
+        ForeignKey(ServicoSaude.id_servico), primary_key=True
+    )
+
+
+class AgendaServico(Base):
+    __tablename__ = "agenda_servico"
+
+    id_agenda: Mapped[int] = mapped_column(Identity(always=True), primary_key=True)
+    id_unidade: Mapped[int] = mapped_column(ForeignKey(UnidadeSaude.id_unidade))
+    id_servico: Mapped[int] = mapped_column(ForeignKey(ServicoSaude.id_servico))
+    dia_semana: Mapped[int] = mapped_column(SmallInteger)  # 0 = segunda, como date.weekday()
+    hora_inicio: Mapped[time]
+    hora_fim: Mapped[time]
+    duracao_minutos: Mapped[int]
+    vagas_por_horario: Mapped[int]
+    status: Mapped[str] = mapped_column(Text, default="ativo")
+    unidade: Mapped[UnidadeSaude] = relationship(lazy="selectin")
+    servico: Mapped[ServicoSaude] = relationship(lazy="selectin")
 
 
 class TipoOciCid(Base):

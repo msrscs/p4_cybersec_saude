@@ -45,6 +45,7 @@ class Evento(StrEnum):
     OCI_CANCELED = "oci_canceled"
     NAVIGATION_CREATED = "navigation_created"
     NAVIGATION_UPDATED = "navigation_updated"
+    NAVIGATION_RESCHEDULED = "navigation_rescheduled"
     PATIENT_CREATED = "patient_created"
     PATIENT_UPDATED = "patient_updated"
     PATIENT_DEACTIVATED = "patient_deactivated"

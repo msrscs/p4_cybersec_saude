@@ -1,7 +1,7 @@
 """RF-12 / THREAT_MODEL E1, E2, T4, I1, R1: OCI e navegação, com alcance por unidade (ADR-0025)."""
 
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 from typing import Any, NamedTuple
 
 import psycopg
@@ -35,8 +35,30 @@ class Cenario(NamedTuple):
     cpf: str
 
 
-def _quando(dias: int = 1) -> str:
-    return (datetime.now(UTC) + timedelta(days=dias)).isoformat()
+FUSO = timezone(timedelta(hours=-3))
+
+
+def _quando(dias: int = 1, hora: int = 9) -> str:
+    """Um horário da agenda do cenário, na hora de Recife."""
+    dia = (datetime.now(FUSO) + timedelta(days=dias)).date()
+    return datetime(dia.year, dia.month, dia.day, hora, tzinfo=FUSO).isoformat()
+
+
+def _agendas(admin: TestClient, id_unidade: int, id_servico: int, vagas: int = 100) -> None:
+    for dia_semana in range(7):
+        resp = admin.post(
+            "/agendas",
+            json={
+                "id_unidade": id_unidade,
+                "id_servico": id_servico,
+                "dia_semana": dia_semana,
+                "hora_inicio": "08:00",
+                "hora_fim": "18:00",
+                "duracao_minutos": 30,
+                "vagas_por_horario": vagas,
+            },
+        )
+        assert resp.status_code == 201, resp.text
 
 
 def _novo_paciente(admin: TestClient) -> str:
@@ -51,9 +73,11 @@ def cenario(logar: Logar) -> Cenario:  # noqa: F811
     admin = logar("Administrador").api
     cid = admin.post("/cids", json=_cid()).json()
     tipo = admin.post("/tipos-oci", json=_tipo_oci(cids=[cid["id"]])).json()
-    servico = admin.post("/servicos", json=_servico()).json()
+    servico = admin.post("/servicos", json=_servico(cids=[cid["id"]])).json()
     unidade = admin.post("/unidades", json=_unidade(servicos=[servico["id"]])).json()
     outra = admin.post("/unidades", json=_unidade(servicos=[servico["id"]])).json()
+    _agendas(admin, unidade["id"], servico["id"])
+    _agendas(admin, outra["id"], servico["id"])
     return Cenario(admin, tipo, cid, servico, unidade, outra, _novo_paciente(admin))
 
 
@@ -367,15 +391,9 @@ def test_entrada_invalida(cenario: Cenario, extra: dict[str, object]) -> None:
 # --- Navegação ---------------------------------------------------------------------------
 
 
-def test_etapa_muda_uma_vez_e_pode_ser_reagendada(cenario: Cenario) -> None:
+def test_etapa_muda_uma_vez(cenario: Cenario) -> None:
     oci = _abrir(cenario)
-    etapa = oci["navegacoes"][0]["id"]
-    url = f"/ocis/{oci['id']}/navegacoes/{etapa}"
-    nova = _quando(9)
-    corpo = cenario.admin.patch(url, json={"data_hora": nova}).json()
-    assert datetime.fromisoformat(corpo["navegacoes"][0]["data_hora"]) == datetime.fromisoformat(
-        nova
-    )
+    url = f"/ocis/{oci['id']}/navegacoes/{oci['navegacoes'][0]['id']}"
     corpo = cenario.admin.patch(url, json={"status": "faltou"}).json()
     assert corpo["navegacoes"][0]["status"] == "faltou"
     assert corpo["navegacoes"][0]["pode_marcar"] is False
@@ -384,7 +402,16 @@ def test_etapa_muda_uma_vez_e_pode_ser_reagendada(cenario: Cenario) -> None:
     assert resp.json() == {"detail": "Esta etapa já foi encerrada: registre uma nova."}
 
 
-@pytest.mark.parametrize("corpo", [{}, {"status": "agendado"}, {"status": "inventado"}])
+@pytest.mark.parametrize(
+    "corpo",
+    [
+        {},
+        {"status": "agendado"},
+        {"status": "remarcado"},
+        {"status": "inventado"},
+        {"data_hora": "x"},
+    ],
+)
 def test_alteracao_de_etapa_invalida(cenario: Cenario, corpo: dict[str, object]) -> None:
     oci = _abrir(cenario)
     url = f"/ocis/{oci['id']}/navegacoes/{oci['navegacoes'][0]['id']}"
@@ -531,6 +558,22 @@ def test_lista_percorre_as_paginas_sem_repetir(cenario: Cenario) -> None:
     assert len(vistas) == len(set(vistas)) and set(vistas) == criadas
 
 
+def test_lista_traz_os_dias_que_faltam(cenario: Cenario, monkeypatch: pytest.MonkeyPatch) -> None:
+    oci = _abrir(cenario)
+    assert oci["dias_restantes"] == 30  # prazo de 30 dias do tipo
+    daqui_a_dez = datetime.now(UTC) + timedelta(days=10)
+    monkeypatch.setattr("app.api.ocis.agora", lambda: daqui_a_dez)
+    assert cenario.admin.get(f"/ocis/{oci['id']}").json()["dias_restantes"] == 20
+    daqui_a_trinta_e_tres = datetime.now(UTC) + timedelta(days=33)
+    monkeypatch.setattr("app.api.ocis.agora", lambda: daqui_a_trinta_e_tres)
+    corpo = {"id_tipo_oci": cenario.tipo["id"]}
+    item = cenario.admin.post("/ocis/lista", json=corpo).json()["itens"][0]
+    assert item["dias_restantes"] == -3 and item["atrasada"] is True
+    monkeypatch.undo()
+    cenario.admin.post(f"/ocis/{oci['id']}/cancelar")
+    assert cenario.admin.get(f"/ocis/{oci['id']}").json()["dias_restantes"] is None
+
+
 def test_lista_com_cursor_desconhecido(cenario: Cenario) -> None:
     resp = cenario.admin.post("/ocis/lista", json={"depois": str(uuid.uuid4())})
     assert resp.json() == {"itens": [], "proximo": None}
@@ -574,10 +617,6 @@ def test_opcoes_trazem_so_o_que_esta_ativo(cenario: Cenario, fabrica_sessao: Fab
         registro.status = "inativo"
     url = f"/ocis/opcoes/tipos/{cenario.tipo['id']}/cids"
     assert [c["id"] for c in admin.get(url).json()["cids"]] == [cenario.cid["id"]]
-    url = f"/ocis/opcoes/unidades/{cenario.unidade['id']}/servicos"
-    assert admin.get(url).json()["servicos"] == [
-        {"id": cenario.servico["id"], "nome": cenario.servico["nome"]}
-    ]
     opcoes = admin.get("/ocis/opcoes").json()
     assert {"id": cenario.tipo["id"], "nome": cenario.tipo["tipo_oci"]} in opcoes["tipos"]
 
@@ -610,6 +649,7 @@ def test_cid_e_servico_em_uso_por_oci_mesmo_fora_dos_vinculos(cenario: Cenario) 
     admin = cenario.admin
     oci = _abrir(cenario)
     admin.patch(f"/tipos-oci/{cenario.tipo['id']}", json={"cids": []})
+    admin.patch(f"/servicos/{cenario.servico['id']}", json={"cids": []})
     resp = admin.delete(f"/cids/{cenario.cid['id']}")
     assert resp.status_code == 409 and "OCIs abertas com este CID" in resp.json()["detail"]
     for unidade in (cenario.unidade, cenario.outra_unidade):

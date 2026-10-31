@@ -6,7 +6,9 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import InstrumentedAttribute, Session
 
 from app.models import (
+    AgendaServico,
     Cid,
+    CidServico,
     Oci,
     OciNavegacao,
     ServicoSaude,
@@ -18,9 +20,9 @@ from app.models import (
     Usuario,
 )
 
-type Registro = TipoUnidade | UnidadeSaude | ServicoSaude | Cid | TipoOci
+type Registro = TipoUnidade | UnidadeSaude | ServicoSaude | Cid | TipoOci | AgendaServico
 type Chave = int | bytes
-type Ordem = ColumnElement[Any] | InstrumentedAttribute[str]
+type Ordem = ColumnElement[Any] | InstrumentedAttribute[Any]
 
 
 def listar[R: Registro](
@@ -71,6 +73,46 @@ def ativos[R: TipoUnidade | UnidadeSaude | ServicoSaude](
 def cids_ativos(db: Session, condicao: ColumnElement[bool], limite: int) -> list[Cid]:
     consulta = select(Cid).where(Cid.status == "ativo", condicao).order_by(Cid.cid).limit(limite)
     return list(db.scalars(consulta))
+
+
+def hashes_de_cids_do_servico(db: Session, id_servico: int) -> set[bytes]:
+    consulta = select(CidServico.fk_cid_cid_hash).where(
+        CidServico.fk_servico_saude_id_servico == id_servico
+    )
+    return set(db.scalars(consulta))
+
+
+def incluir_cids_no_servico(db: Session, id_servico: int, hashes: Iterable[bytes]) -> None:
+    linhas = [{"fk_servico_saude_id_servico": id_servico, "fk_cid_cid_hash": h} for h in hashes]
+    if linhas:
+        db.execute(insert(CidServico).values(linhas).on_conflict_do_nothing())
+
+
+def remover_cids_do_servico(db: Session, id_servico: int, hashes: Iterable[bytes]) -> None:
+    db.execute(
+        delete(CidServico).where(
+            CidServico.fk_servico_saude_id_servico == id_servico,
+            CidServico.fk_cid_cid_hash.in_(list(hashes)),
+        )
+    )
+
+
+def servicos_ativos_com_cid(db: Session, cid_hash: bytes) -> int:
+    consulta = (
+        select(func.count())
+        .select_from(CidServico)
+        .join(ServicoSaude, ServicoSaude.id_servico == CidServico.fk_servico_saude_id_servico)
+        .where(CidServico.fk_cid_cid_hash == cid_hash, ServicoSaude.status == "ativo")
+    )
+    return int(db.scalar(consulta) or 0)
+
+
+def servico_na_unidade(db: Session, id_unidade: int, id_servico: int) -> bool:
+    consulta = select(UnidadeServico.fk_servico_saude_id_servico).where(
+        UnidadeServico.fk_unidade_saude_id_unidade == id_unidade,
+        UnidadeServico.fk_servico_saude_id_servico == id_servico,
+    )
+    return db.scalars(consulta.limit(1)).first() is not None
 
 
 def hashes_de_cids_do_tipo(db: Session, id_tipo_oci: int) -> set[bytes]:

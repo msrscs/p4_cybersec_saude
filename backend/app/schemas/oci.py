@@ -1,6 +1,6 @@
 import uuid
-from datetime import UTC, datetime, timedelta
-from typing import Annotated, Literal, Self
+from datetime import UTC, date, datetime, timedelta
+from typing import Annotated, Literal
 
 from pydantic import (
     AfterValidator,
@@ -9,7 +9,6 @@ from pydantic import (
     ConfigDict,
     Field,
     StringConstraints,
-    model_validator,
 )
 
 from app.schemas.validadores import Cpf, sem_controle
@@ -79,14 +78,13 @@ class EtapaNova(_Entrada):
 
 
 class EtapaAlteracao(_Entrada):
-    status: Literal["realizado", "faltou", "cancelado"] | None = None
-    data_hora: DataHora | None = None
+    status: Literal["realizado", "faltou", "cancelado"]
 
-    @model_validator(mode="after")
-    def _algum_campo(self) -> Self:
-        if self.status is None and self.data_hora is None:
-            raise ValueError("Informe a situação ou a data.")
-        return self
+
+class EtapaRemarcacao(_Entrada):
+    id_unidade: IdInteiro
+    id_servico: IdInteiro
+    data_hora: DataHora
 
 
 class CidResumo(BaseModel):
@@ -105,6 +103,7 @@ class OciResumo(BaseModel):
     data_criacao: datetime
     prazo_em: datetime
     atrasada: bool
+    dias_restantes: int | None  # só em OCI aberta; negativo quando o prazo já passou
 
 
 class OciPagina(BaseModel):
@@ -146,5 +145,30 @@ class ListaDeCids(BaseModel):
     cids: list[CidResumo]
 
 
-class ListaDeServicos(BaseModel):
+class UnidadeQueAtende(BaseModel):
+    id: int
+    nome: str
     servicos: list[OpcaoSimples]
+
+
+class UnidadesQueAtendem(BaseModel):
+    unidades: list[UnidadeQueAtende]
+
+
+class DiaComVagas(BaseModel):
+    data: date
+    vagas: int
+
+
+class DiasComVagas(BaseModel):
+    dias: list[DiaComVagas]
+
+
+class HorarioVago(BaseModel):
+    data_hora: datetime
+    hora: str
+    vagas: int
+
+
+class HorariosVagos(BaseModel):
+    horarios: list[HorarioVago]
