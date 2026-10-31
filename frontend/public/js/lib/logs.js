@@ -23,6 +23,7 @@ const ROTULOS = {
   mfa_success: 'MFA confirmado',
   password_change: 'Troca de senha',
   navigation_created: 'Etapa da OCI incluída',
+  navigation_rescheduled: 'Etapa da OCI remarcada',
   navigation_updated: 'Etapa da OCI alterada',
   oci_canceled: 'OCI cancelada',
   oci_concluded: 'OCI concluída',

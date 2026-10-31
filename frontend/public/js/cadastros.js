@@ -15,8 +15,68 @@ import { criarSeletor } from './seletor.js';
 
 const $ = (id) => document.getElementById(id);
 const ROTULO_STATUS = { ativo: 'Ativo', inativo: 'Inativo' };
+const DIAS_DA_SEMANA = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
 
 export const CATALOGOS = {
+  agendas: {
+    secao: 'secao-agendas',
+    rota: '/agendas',
+    titulo: 'Agendas de atendimento',
+    singular: 'agenda',
+    novo: 'Nova agenda',
+    identificacao: (item) =>
+      `${item.unidade}, ${item.servico}, ${DIAS_DA_SEMANA[item.dia_semana]} ${item.hora_inicio}`,
+    campos: [
+      {
+        nome: 'id_unidade',
+        rotulo: 'Unidade da agenda',
+        numerico: true,
+        opcoesDe: '/unidades/opcoes',
+        nomeAtual: (item) => item.unidade,
+        sufixoInativo: '(inativa)',
+      },
+      {
+        nome: 'id_servico',
+        rotulo: 'Serviço da agenda',
+        numerico: true,
+        opcoesDe: '/servicos/opcoes',
+        nomeAtual: (item) => item.servico,
+        sufixoInativo: '(inativo)',
+      },
+      {
+        nome: 'dia_semana',
+        rotulo: 'Dia da semana',
+        numerico: true,
+        opcoesFixas: DIAS_DA_SEMANA.map((nome, id) => ({ id, nome })),
+      },
+      { nome: 'hora_inicio', rotulo: 'Hora inicial', tipo: 'time' },
+      { nome: 'hora_fim', rotulo: 'Hora final', tipo: 'time' },
+      {
+        nome: 'duracao_minutos',
+        rotulo: 'Duração do atendimento (minutos)',
+        max: 3,
+        numerico: true,
+        padrao: /^[1-9][0-9]{0,2}$/,
+        mensagem: 'Informe a duração em minutos, de 5 a 480.',
+      },
+      {
+        nome: 'vagas_por_horario',
+        rotulo: 'Vagas por horário',
+        max: 3,
+        numerico: true,
+        padrao: /^[1-9][0-9]{0,2}$/,
+        mensagem: 'Informe as vagas por horário, de 1 a 100.',
+      },
+    ],
+    colunas: [
+      { titulo: 'Unidade', valor: (item) => item.unidade },
+      { titulo: 'Serviço', valor: (item) => item.servico },
+      { titulo: 'Dia', valor: (item) => DIAS_DA_SEMANA[item.dia_semana] },
+      { titulo: 'Horário', valor: (item) => `${item.hora_inicio} às ${item.hora_fim}` },
+      { titulo: 'Duração', valor: (item) => `${item.duracao_minutos} min` },
+      { titulo: 'Vagas', valor: (item) => String(item.vagas_por_horario) },
+    ],
+  },
   tiposOci: {
     secao: 'secao-tipos-oci',
     rota: '/tipos-oci',
@@ -133,10 +193,21 @@ export const CATALOGOS = {
         opcional: true,
         vazio: '',
       },
+      {
+        nome: 'cids',
+        rotulo: 'CIDs atendidos por este serviço',
+        rotuloBusca: 'Buscar CID do serviço',
+        selecaoPorBusca: true,
+        buscaEm: '/cids/opcoes',
+        rotuloItem: rotuloDeCid,
+        codigoItem: (item) => item.cid,
+        vazioSelecao: 'Nenhum CID selecionado.',
+      },
     ],
     colunas: [
       { titulo: 'Nome', valor: (item) => item.nome },
       { titulo: 'Descrição', valor: (item) => item.descricao || '—' },
+      { titulo: 'CIDs', valor: (item) => resumoDeCodigos(item.cids.map(({ cid }) => cid)) },
     ],
   },
   cids: {
@@ -166,8 +237,20 @@ export const CATALOGOS = {
 
 function controleDoCampo(campo, id) {
   if (campo.multipla) return el('div', { id, class: 'grupos__lista' });
+  if (campo.opcoesFixas) {
+    return el(
+      'select',
+      { id },
+      campo.opcoesFixas.map(({ id: valor, nome }) => el('option', { value: String(valor) }, nome)),
+    );
+  }
   if (campo.opcoesDe) return el('select', { id });
-  return el('input', { id, type: 'text', maxlength: campo.max, autocomplete: 'off' });
+  return el('input', {
+    id,
+    type: campo.tipo ?? 'text',
+    maxlength: campo.tipo ? null : campo.max,
+    autocomplete: 'off',
+  });
 }
 
 export function criarCadastro(chamarApi, catalogo, podeGerenciar) {

@@ -1324,3 +1324,88 @@ form.ficha + .tabela {
 .selo[data-status='pendente'] {
   border: 1px solid var(--border);
 }
+
+/* Indicador de prazo: cor e formato mudam juntos, para o aviso não depender só da cor */
+.prazo {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  font-weight: 600;
+}
+
+.prazo__icone {
+  font-size: 0.95em;
+}
+
+.prazo--no-prazo .prazo__icone {
+  color: #15803d;
+}
+
+.prazo--alerta .prazo__icone {
+  color: #b45309;
+}
+
+.prazo--atrasada,
+.prazo--atrasada .prazo__icone {
+  color: var(--danger);
+}
+
+.prazo--encerrada {
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+@media (prefers-color-scheme: dark) {
+  .prazo--no-prazo .prazo__icone {
+    color: #4ade80;
+  }
+
+  .prazo--alerta .prazo__icone {
+    color: #fbbf24;
+  }
+}
+
+/* Escolha de dia e horário */
+.agendador {
+  margin: 0 0 12px;
+}
+
+.agendador .filtros {
+  align-items: end;
+}
+
+.vagas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 12px;
+  max-height: 232px; /* 60 dias de agenda não empurram o resto do formulário */
+  margin: 8px 0 0;
+  overflow-y: auto;
+}
+
+.vaga {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.9rem;
+  color: var(--text);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.vaga:hover {
+  background: var(--primary-soft);
+}
+
+.vaga[aria-pressed='true'] {
+  border-color: var(--primary);
+  color: var(--surface);
+  background: var(--primary);
+}
+
+#form-etapa,
+#form-remarcar {
+  margin-top: 16px;
+}

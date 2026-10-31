@@ -451,6 +451,7 @@ async function iniciar() {
     'menu-unidades',
     'menu-servicos',
     'menu-cids',
+    'menu-agendas',
     'menu-tipos-oci',
   ])
     $(id).hidden = !temCadastros;

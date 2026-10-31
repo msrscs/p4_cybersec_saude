@@ -501,6 +501,7 @@ test('no celular a página não tem rolagem lateral, em nenhuma seção', async 
     'Unidades',
     'Serviços',
     'CID',
+    'Agendas',
     'Tipos de OCI',
     'Auditoria',
     'Pacientes',
@@ -518,18 +519,51 @@ test('no celular a página não tem rolagem lateral, em nenhuma seção', async 
   await page.getByRole('button', { name: 'Pacientes', exact: true }).click();
 });
 
-test('OCI: abrir, encaminhar, marcar, duplicada, concluir com resultado', async () => {
+test('OCI: agenda, marcar por dia e horário, remarcar, prazo, duplicada e concluir', async () => {
+  // Preparação: o serviço atende o CID, e a unidade tem agenda amanhã, com 1 vaga por horário.
+  await page.getByRole('button', { name: 'Serviços', exact: true }).click();
+  const servico = page.locator('#secao-servicos tbody tr', { hasText: 'Consulta' });
+  await servico.getByRole('button', { name: /^Editar/ }).click();
+  await page.getByLabel('Buscar CID do serviço').fill('C50.9');
+  await page.locator('#secao-servicos').getByRole('button', { name: 'Procurar' }).click();
+  await page.locator('#secao-servicos').getByRole('button', { name: 'Incluir C50.9' }).click();
+  await page.getByRole('button', { name: 'Salvar serviço' }).click();
+  await expect(servico).toContainText('C50.9');
+
+  const amanha = (new Date(Date.now() + 86_400_000 - 3 * 3_600_000).getUTCDay() + 6) % 7;
+  await page.getByRole('button', { name: 'Agendas', exact: true }).click();
+  await page.getByRole('button', { name: 'Nova agenda' }).click();
+  await page.getByLabel('Unidade da agenda').selectOption({ label: 'UBS E2E' });
+  await page.getByLabel('Serviço da agenda').selectOption({ label: '<b>Consulta</b> Ortopedia' });
+  await page.getByLabel('Dia da semana').selectOption(String(amanha));
+  await page.getByLabel('Hora inicial').fill('08:00');
+  await page.getByLabel('Hora final').fill('09:30');
+  await page.getByLabel('Duração do atendimento (minutos)').fill('30');
+  await page.getByLabel('Vagas por horário').fill('1');
+  await page.getByRole('button', { name: 'Salvar agenda' }).click();
+  await expect(page.locator('#secao-agendas tbody tr').first()).toContainText('08:00 às 09:30');
+
   const secao = page.locator('#secao-ocis');
   await page.getByRole('button', { name: 'OCIs', exact: true }).click();
   await expect(secao.getByRole('heading', { name: 'OCIs', exact: true })).toBeVisible();
 
-  await secao.getByRole('button', { name: 'Nova OCI' }).click();
-  await secao.getByLabel('CPF do paciente da OCI').fill(cpfPaciente);
-  await secao.getByLabel('Tipo da nova OCI').selectOption({ label: 'OCI Oncologia' });
-  await expect(secao.getByLabel('CID da nova OCI').locator('option')).toHaveCount(1);
+  // Só a unidade que atende aparece; o dia mostra as vagas; os horários vêm depois do dia.
+  const agendaNova = secao.locator('#agenda-nova');
+  async function preencherNova() {
+    await secao.getByRole('button', { name: 'Nova OCI' }).click();
+    await secao.getByLabel('CPF do paciente da OCI').fill(cpfPaciente);
+    await secao.getByLabel('Tipo da nova OCI').selectOption({ label: 'OCI Oncologia' });
+    await expect(secao.getByLabel('Unidade da primeira etapa').locator('option')).toHaveCount(2);
+  }
+  await preencherNova();
   await secao.getByLabel('Unidade da primeira etapa').selectOption({ label: 'UBS E2E' });
-  await expect(secao.getByLabel('Serviço da primeira etapa').locator('option')).toHaveCount(1);
-  await secao.getByLabel('Data e hora da primeira etapa').fill('2030-05-10T09:30');
+  await secao.getByLabel('Serviço da primeira etapa').selectOption({ index: 1 });
+  await expect(agendaNova.locator('.vaga--dia').first()).toContainText('3 vagas');
+  await expect(agendaNova.locator('.vaga--horario')).toHaveCount(0);
+  await agendaNova.locator('.vaga--dia').first().click();
+  await expect(agendaNova.locator('.vaga--horario')).toHaveCount(3);
+  await expect(agendaNova.locator('.vaga--horario').first()).toHaveText('08:00 · 1 vaga');
+  await agendaNova.locator('.vaga--horario').first().click();
   await secao.locator('#form-oci').getByRole('button', { name: 'Abrir OCI' }).click();
 
   const ficha = page.locator('#ficha-oci');
@@ -538,30 +572,47 @@ test('OCI: abrir, encaminhar, marcar, duplicada, concluir com resultado', async 
   await expect(ficha.locator('#oci-cid')).toContainText('C50.9');
   await expect(ficha.locator('#oci-cpf')).toHaveText(/^\*\*\*\.\d{3}\.\d{3}-\*\*$/);
 
-  // A lista mostra a OCI, com o CPF mascarado.
+  // A lista mostra quantos dias faltam, com o indicador de prazo.
   const linha = secao.locator('#corpo-ocis tr', { hasText: 'Maria das Dores Silva' });
   await expect(linha).toContainText('OCI Oncologia');
   await expect(linha.locator('code')).toHaveText(/^\*\*\*\.\d{3}\.\d{3}-\*\*$/);
+  await expect(linha.locator('.prazo--no-prazo')).toContainText('Faltam 30 dias');
 
-  // Encaminhar: nova etapa na mesma OCI, e marcar a primeira como realizada.
+  // A vaga marcada some; encaminhar usa o mesmo caminho.
+  const agendaEtapa = ficha.locator('#agenda-etapa');
   await ficha.getByLabel('Unidade do encaminhamento').selectOption({ label: 'UBS E2E' });
-  await expect(ficha.getByLabel('Serviço do encaminhamento').locator('option')).toHaveCount(1);
-  await ficha.getByLabel('Data e hora do encaminhamento').fill('2030-05-20T10:00');
+  await ficha.getByLabel('Serviço do encaminhamento').selectOption({ index: 1 });
+  await expect(agendaEtapa.locator('.vaga--dia').first()).toContainText('2 vagas');
+  await agendaEtapa.locator('.vaga--dia').first().click();
+  await expect(agendaEtapa.locator('.vaga--horario').first()).toHaveText('08:30 · 1 vaga');
+  await agendaEtapa.locator('.vaga--horario').first().click();
   await ficha.getByRole('button', { name: 'Incluir etapa' }).click();
   const etapas = ficha.locator('#oci-etapas tr');
   await expect(etapas).toHaveCount(2);
-  await etapas.first().getByRole('button', { name: 'Realizado' }).click();
-  await expect(etapas.first()).toContainText('Realizado');
-  await expect(etapas.first().getByRole('button', { name: 'Realizado' })).toHaveCount(0);
+
+  // Remarcar: a etapa antiga fica no histórico, e a vaga dela volta a ficar livre.
+  await etapas.first().getByRole('button', { name: 'Remarcar' }).click();
+  const remarcar = ficha.locator('#agenda-remarcar');
+  await ficha.getByLabel('Nova unidade').selectOption({ label: 'UBS E2E' });
+  await ficha.getByLabel('Novo serviço').selectOption({ index: 1 });
+  await expect(remarcar.locator('.vaga--dia').first()).toContainText('1 vaga');
+  await remarcar.locator('.vaga--dia').first().click();
+  await expect(remarcar.locator('.vaga--horario').first()).toHaveText('09:00 · 1 vaga');
+  await remarcar.locator('.vaga--horario').first().click();
+  await ficha.getByRole('button', { name: 'Confirmar remarcação' }).click();
+  await expect(etapas).toHaveCount(3);
+  await expect(ficha.locator('#oci-etapas')).toContainText('Remarcado');
+
+  const agendada = etapas.filter({ hasText: 'Agendado' }).first();
+  await agendada.getByRole('button', { name: 'Realizado' }).click();
+  await expect(ficha.locator('#oci-etapas')).toContainText('Realizado');
 
   // Mesmo paciente e tipo: recusa enquanto houver OCI aberta.
-  await secao.getByRole('button', { name: 'Nova OCI' }).click();
-  await secao.getByLabel('CPF do paciente da OCI').fill(cpfPaciente);
-  await secao.getByLabel('Tipo da nova OCI').selectOption({ label: 'OCI Oncologia' });
-  await expect(secao.getByLabel('CID da nova OCI').locator('option')).toHaveCount(1);
+  await preencherNova();
   await secao.getByLabel('Unidade da primeira etapa').selectOption({ label: 'UBS E2E' });
-  await expect(secao.getByLabel('Serviço da primeira etapa').locator('option')).toHaveCount(1);
-  await secao.getByLabel('Data e hora da primeira etapa').fill('2030-05-10T09:30');
+  await secao.getByLabel('Serviço da primeira etapa').selectOption({ index: 1 });
+  await agendaNova.locator('.vaga--dia').first().click();
+  await agendaNova.locator('.vaga--horario').first().click();
   await secao.locator('#form-oci').getByRole('button', { name: 'Abrir OCI' }).click();
   await expect(secao.locator('#status-form-oci')).toHaveText(
     'Este paciente já tem uma OCI aberta deste tipo.',
@@ -577,6 +628,7 @@ test('OCI: abrir, encaminhar, marcar, duplicada, concluir com resultado', async 
   await expect(ficha.locator('#oci-resultado b')).toHaveCount(0);
   await expect(ficha.getByRole('button', { name: 'Concluir OCI' })).toBeHidden();
   await expect(ficha.getByRole('button', { name: 'Incluir etapa' })).toBeHidden();
+  await expect(linha.locator('.prazo--encerrada')).toHaveText(/Encerrada/);
 
   // Filtro por situação e por CPF.
   await secao.getByLabel('Situação da OCI').selectOption('cancelada');

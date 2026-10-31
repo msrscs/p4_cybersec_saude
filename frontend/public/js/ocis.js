@@ -1,10 +1,11 @@
 // Tela de OCIs e navegação (RF-12, ADR-0025). A interface esconde o que o perfil não pode fazer,
 // mas quem autoriza e aplica o alcance por unidade, a cada requisição, é o backend.
+import { criarAgendador } from './agendador.js';
 import { cpfValido, formatarCpf } from './lib/cpf.js';
 import { definirStatus, el, limpar } from './lib/dom.js';
 import {
   corpoDaListaDeOcis,
-  instanteDe,
+  indicadorDePrazo,
   ROTULO_ETAPA,
   ROTULO_OCI,
   seloDaSituacao,
@@ -17,6 +18,16 @@ const rotuloCid = (cid) => `${cid.cid} — ${cid.descricao}`;
 
 function selo(situacao, rotulo) {
   return el('span', { class: 'selo', dataset: { status: seloDaSituacao(situacao) } }, rotulo);
+}
+
+function indicador(oci) {
+  const { nivel, icone, texto } = indicadorDePrazo(oci);
+  return el(
+    'span',
+    { class: `prazo prazo--${nivel}` },
+    el('span', { class: 'prazo__icone', 'aria-hidden': 'true' }, icone),
+    texto,
+  );
 }
 
 function status(id) {
@@ -43,7 +54,7 @@ export function criarOcis(chamarApi, permissoes) {
   const cursoresAnteriores = [];
   let ociAtual = null;
 
-  // --- Controles dependentes: o tipo define os CIDs, e a unidade define os serviços ------
+  // --- Controle dependente: o tipo define os CIDs ----------------------------------------
 
   async function carregarCids(select, idTipo) {
     limpar(select);
@@ -57,26 +68,6 @@ export function criarOcis(chamarApi, permissoes) {
       null,
       cids.map((c) => ({ id: c.id, nome: rotuloCid(c) })),
     );
-  }
-
-  async function carregarServicos(select, idUnidade) {
-    limpar(select);
-    if (!idUnidade) return;
-    const { servicos } = await chamarApi(
-      'GET',
-      `/ocis/opcoes/unidades/${encodeURIComponent(idUnidade)}/servicos`,
-    );
-    preencher(select, null, servicos);
-  }
-
-  function aoMudar(origem, destino, carregar, statusEl) {
-    origem.addEventListener('change', async () => {
-      try {
-        await carregar(destino, origem.value);
-      } catch (erro) {
-        definirStatus(statusEl, erro.message, 'error');
-      }
-    });
   }
 
   // --- Estrutura da tela -----------------------------------------------------------------
@@ -149,9 +140,12 @@ export function criarOcis(chamarApi, permissoes) {
   });
   const novaTipo = el('select', { id: 'oci-nova-tipo' });
   const novaCid = el('select', { id: 'oci-nova-cid' });
-  const novaUnidade = el('select', { id: 'oci-nova-unidade' });
-  const novaServico = el('select', { id: 'oci-nova-servico' });
-  const novaData = el('input', { id: 'oci-nova-data', type: 'datetime-local' });
+  const novaAgenda = criarAgendador(chamarApi, {
+    id: 'agenda-nova',
+    rotuloUnidade: 'Unidade da primeira etapa',
+    rotuloServico: 'Serviço da primeira etapa',
+    permitir: (id) => opcoes.unidades_abertura.some((u) => u.id === id),
+  });
   const statusForm = status('status-form-oci');
   const formNova = el(
     'form',
@@ -160,9 +154,7 @@ export function criarOcis(chamarApi, permissoes) {
     campo(novaCpf.id, 'CPF do paciente da OCI', novaCpf),
     campo(novaTipo.id, 'Tipo da nova OCI', novaTipo),
     campo(novaCid.id, 'CID da nova OCI', novaCid),
-    campo(novaUnidade.id, 'Unidade da primeira etapa', novaUnidade),
-    campo(novaServico.id, 'Serviço da primeira etapa', novaServico),
-    campo(novaData.id, 'Data e hora da primeira etapa', novaData),
+    novaAgenda.elemento,
     statusForm,
     el(
       'div',
@@ -183,15 +175,21 @@ export function criarOcis(chamarApi, permissoes) {
   );
   novaCpf.addEventListener('input', () => (novaCpf.value = formatarCpf(novaCpf.value)));
   filtroCpf.addEventListener('input', () => (filtroCpf.value = formatarCpf(filtroCpf.value)));
-  aoMudar(novaTipo, novaCid, carregarCids, statusForm);
-  aoMudar(novaUnidade, novaServico, carregarServicos, statusForm);
+  novaTipo.addEventListener('change', async () => {
+    try {
+      await carregarCids(novaCid, novaTipo.value);
+      await novaAgenda.carregar(novaCid.value);
+    } catch (erro) {
+      definirStatus(statusForm, erro.message, 'error');
+    }
+  });
+  novaCid.addEventListener('change', () => novaAgenda.carregar(novaCid.value));
 
   async function abrirFormNova() {
     formNova.reset();
     limpar(novaCid);
-    limpar(novaServico);
     preencher(novaTipo, 'Selecione', opcoes.tipos);
-    preencher(novaUnidade, 'Selecione', opcoes.unidades_abertura);
+    await novaAgenda.carregar(null);
     definirStatus(
       statusForm,
       opcoes.unidades_abertura.length === 0 ? 'Seu usuário não tem unidade para abrir OCI.' : '',
@@ -202,17 +200,17 @@ export function criarOcis(chamarApi, permissoes) {
 
   formNova.addEventListener('submit', async (evento) => {
     evento.preventDefault();
-    const instante = instanteDe(novaData.value);
+    const marcacao = novaAgenda.valor();
     if (!cpfValido(novaCpf.value)) {
       definirStatus(statusForm, 'Informe um CPF válido.', 'error');
       return;
     }
-    if (!novaTipo.value || !novaCid.value || !novaUnidade.value || !novaServico.value) {
-      definirStatus(statusForm, 'Escolha tipo, CID, unidade e serviço.', 'error');
+    if (!novaTipo.value || !novaCid.value) {
+      definirStatus(statusForm, 'Escolha o tipo e o CID.', 'error');
       return;
     }
-    if (!instante) {
-      definirStatus(statusForm, 'Informe a data e a hora da primeira etapa.', 'error');
+    if (!marcacao) {
+      definirStatus(statusForm, 'Escolha a unidade, o serviço, o dia e o horário.', 'error');
       return;
     }
     try {
@@ -220,9 +218,7 @@ export function criarOcis(chamarApi, permissoes) {
         cpf: novaCpf.value.replace(/\D/g, ''),
         id_tipo_oci: Number(novaTipo.value),
         cid: novaCid.value,
-        id_unidade: Number(novaUnidade.value),
-        id_servico: Number(novaServico.value),
-        data_hora: instante,
+        ...marcacao,
       });
       formNova.reset();
       formNova.hidden = true;
@@ -235,23 +231,56 @@ export function criarOcis(chamarApi, permissoes) {
 
   // --- Ficha -----------------------------------------------------------------------------
 
-  const etapaUnidade = el('select', { id: 'oci-etapa-unidade' });
-  const etapaServico = el('select', { id: 'oci-etapa-servico' });
-  const etapaData = el('input', { id: 'oci-etapa-data', type: 'datetime-local' });
   const statusFicha = status('status-oci');
+  const agendaEtapa = criarAgendador(chamarApi, {
+    id: 'agenda-etapa',
+    rotuloUnidade: 'Unidade do encaminhamento',
+    rotuloServico: 'Serviço do encaminhamento',
+    permitir: () => true,
+  });
   const formEtapa = el(
     'form',
-    { class: 'filtros', id: 'form-etapa', novalidate: true, autocomplete: 'off' },
-    campo(etapaUnidade.id, 'Unidade do encaminhamento', etapaUnidade),
-    campo(etapaServico.id, 'Serviço do encaminhamento', etapaServico),
-    campo(etapaData.id, 'Data e hora do encaminhamento', etapaData),
+    { class: 'form', id: 'form-etapa', novalidate: true, autocomplete: 'off' },
+    el('h3', {}, 'Marcar nova etapa'),
+    agendaEtapa.elemento,
     el(
       'div',
       { class: 'acoes' },
       el('button', { class: 'button button--pequeno', type: 'submit' }, 'Incluir etapa'),
     ),
   );
-  aoMudar(etapaUnidade, etapaServico, carregarServicos, statusFicha);
+
+  // Remarcação: o mesmo caminho da marcação, para a etapa escolhida na tabela.
+  let etapaARemarcar = null;
+  const agendaRemarcar = criarAgendador(chamarApi, {
+    id: 'agenda-remarcar',
+    rotuloUnidade: 'Nova unidade',
+    rotuloServico: 'Novo serviço',
+    permitir: () => true,
+  });
+  const tituloRemarcar = el('h3', {}, 'Remarcar etapa');
+  const formRemarcar = el(
+    'form',
+    { class: 'form', id: 'form-remarcar', novalidate: true, autocomplete: 'off', hidden: true },
+    tituloRemarcar,
+    agendaRemarcar.elemento,
+    el(
+      'div',
+      { class: 'acoes' },
+      el('button', { class: 'button button--pequeno', type: 'submit' }, 'Confirmar remarcação'),
+      el(
+        'button',
+        {
+          class: 'link link--botao',
+          type: 'button',
+          onclick: () => {
+            formRemarcar.hidden = true;
+          },
+        },
+        'Desistir de remarcar',
+      ),
+    ),
+  );
 
   const resultado = el('textarea', { id: 'oci-conclusao-resultado', maxlength: 4000, rows: 3 });
   const resultadoCid = el('select', { id: 'oci-conclusao-cid' });
@@ -352,6 +381,7 @@ export function criarOcis(chamarApi, permissoes) {
         corpoEtapas,
       ),
     ),
+    formRemarcar,
     formEtapa,
     formConclusao,
     statusFicha,
@@ -400,10 +430,27 @@ export function criarOcis(chamarApi, permissoes) {
               marcar('realizado', 'Realizado'),
               marcar('faltou', 'Faltou'),
               marcar('cancelado', 'Cancelado'),
+              el(
+                'button',
+                {
+                  type: 'button',
+                  class: 'link link--botao',
+                  onclick: () => abrirRemarcacao(etapa),
+                },
+                'Remarcar',
+              ),
             ]
           : null,
       ),
     );
+  }
+
+  async function abrirRemarcacao(etapa) {
+    etapaARemarcar = etapa;
+    tituloRemarcar.textContent = `Remarcar: ${etapa.servico}, ${dataHora(etapa.data_hora)}`;
+    formRemarcar.hidden = false;
+    await agendaRemarcar.carregar(ociAtual.cid.id);
+    formRemarcar.scrollIntoView();
   }
 
   function mostrarFicha(oci) {
@@ -417,7 +464,7 @@ export function criarOcis(chamarApi, permissoes) {
     $('oci-tipo').textContent = oci.tipo_oci;
     $('oci-cid').textContent = rotuloCid(oci.cid);
     $('oci-criada').textContent = dataHora(oci.data_criacao);
-    $('oci-prazo').textContent = `${data(oci.prazo_em)}${oci.atrasada ? ' (atrasada)' : ''}`;
+    $('oci-prazo').replaceChildren(`${data(oci.prazo_em)} `, indicador(oci));
     $('oci-resultado').textContent = oci.resultado ?? '—';
     $('oci-resultado-cid').textContent = oci.resultado_cid ? rotuloCid(oci.resultado_cid) : '—';
     corpoEtapas.replaceChildren(...oci.navegacoes.map((etapa) => linhaEtapa(oci, etapa)));
@@ -426,8 +473,8 @@ export function criarOcis(chamarApi, permissoes) {
     formEtapa.reset();
     formConclusao.reset();
     $('oci-confirmar').hidden = true;
-    limpar(etapaServico);
-    preencher(etapaUnidade, 'Selecione', opcoes.unidades);
+    formRemarcar.hidden = true;
+    if (aberta && pode('editar')) agendaEtapa.carregar(oci.cid.id);
     definirStatus(statusFicha, '');
     ficha.hidden = false;
     if (aberta && pode('concluir')) carregarCidsDoResultado(oci);
@@ -460,16 +507,23 @@ export function criarOcis(chamarApi, permissoes) {
 
   formEtapa.addEventListener('submit', (evento) => {
     evento.preventDefault();
-    const instante = instanteDe(etapaData.value);
-    if (!etapaUnidade.value || !etapaServico.value || !instante) {
-      definirStatus(statusFicha, 'Escolha unidade, serviço, data e hora.', 'error');
+    const marcacao = agendaEtapa.valor();
+    if (!marcacao) {
+      definirStatus(statusFicha, 'Escolha a unidade, o serviço, o dia e o horário.', 'error');
       return;
     }
-    executar(`/ocis/${encodeURIComponent(ociAtual.id)}/navegacoes`, {
-      id_unidade: Number(etapaUnidade.value),
-      id_servico: Number(etapaServico.value),
-      data_hora: instante,
-    });
+    executar(`/ocis/${encodeURIComponent(ociAtual.id)}/navegacoes`, marcacao);
+  });
+
+  formRemarcar.addEventListener('submit', (evento) => {
+    evento.preventDefault();
+    const marcacao = agendaRemarcar.valor();
+    if (!marcacao) {
+      definirStatus(statusFicha, 'Escolha a unidade, o serviço, o dia e o horário.', 'error');
+      return;
+    }
+    const id = encodeURIComponent(ociAtual.id);
+    executar(`/ocis/${id}/navegacoes/${encodeURIComponent(etapaARemarcar.id)}/remarcar`, marcacao);
   });
 
   formConclusao.addEventListener('submit', (evento) => {
@@ -503,16 +557,12 @@ export function criarOcis(chamarApi, permissoes) {
       'tr',
       {},
       el('td', {}, oci.paciente_nome ?? 'Cadastro ilegível'),
-      el('td', {}, el('code', {}, oci.cpf_mascarado ?? '—')),
+      el('td', {}, indicador(oci)),
+      el('td', { class: 'tabela__sem-quebra' }, el('code', {}, oci.cpf_mascarado ?? '—')),
       el('td', {}, oci.tipo_oci),
       el('td', { title: oci.cid.descricao }, oci.cid.cid),
       el('td', {}, selo(oci.status, ROTULO_OCI[oci.status] ?? oci.status)),
-      el(
-        'td',
-        { class: 'tabela__sem-quebra' },
-        data(oci.prazo_em),
-        oci.atrasada ? [' ', selo('atrasada', 'Atrasada')] : null,
-      ),
+      el('td', { class: 'tabela__sem-quebra' }, data(oci.prazo_em)),
       el(
         'td',
         {},
@@ -609,7 +659,7 @@ export function criarOcis(chamarApi, permissoes) {
           el(
             'tr',
             {},
-            ['Paciente', 'CPF', 'Tipo', 'CID', 'Situação', 'Prazo'].map((titulo) =>
+            ['Paciente', 'Dias', 'CPF', 'Tipo', 'CID', 'Situação', 'Prazo'].map((titulo) =>
               el('th', { scope: 'col' }, titulo),
             ),
             el('th', { scope: 'col' }, el('span', { class: 'sr-only' }, 'Ação')),

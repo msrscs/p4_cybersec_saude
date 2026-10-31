@@ -6,6 +6,7 @@ export const ROTULO_ETAPA = {
   realizado: 'Realizado',
   faltou: 'Faltou',
   cancelado: 'Cancelado',
+  remarcado: 'Remarcado',
 };
 const SELOS = {
   aberta: 'ativo',
@@ -42,4 +43,41 @@ export function valorDeDataLocal(iso) {
     `${data.getFullYear()}-${dois(data.getMonth() + 1)}-${dois(data.getDate())}` +
     `T${dois(data.getHours())}:${dois(data.getMinutes())}`
   );
+}
+
+const plural = (n, palavra) => `${n} ${palavra}${n === 1 ? '' : 's'}`;
+
+/**
+ * Situação do prazo para a lista: cor e formato do ícone mudam juntos, para o aviso não depender
+ * só da cor. Faltando até 7 dias, fica em alerta.
+ */
+export function indicadorDePrazo({ status, dias_restantes: dias, atrasada }) {
+  if (status !== 'aberta') return { nivel: 'encerrada', icone: '■', texto: 'Encerrada' };
+  if (atrasada) {
+    const atraso = Math.max(-dias, 0);
+    return {
+      nivel: 'atrasada',
+      icone: '▲',
+      texto: atraso === 0 ? 'Atrasada hoje' : `Atrasada há ${plural(atraso, 'dia')}`,
+    };
+  }
+  if (dias === 0) return { nivel: 'alerta', icone: '●', texto: 'Vence hoje' };
+  return {
+    nivel: dias <= 7 ? 'alerta' : 'no-prazo',
+    icone: '●',
+    texto: `${dias === 1 ? 'Falta' : 'Faltam'} ${plural(dias, 'dia')}`,
+  };
+}
+
+const DIAS_DA_SEMANA = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+
+export function rotuloDeDia({ data, vagas }) {
+  const [ano, mes, dia] = data.split('-').map(Number);
+  const semana = DIAS_DA_SEMANA[new Date(ano, mes - 1, dia).getDay()];
+  const curta = `${String(dia).padStart(2, '0')}/${String(mes).padStart(2, '0')}`;
+  return `${semana} ${curta} · ${plural(vagas, 'vaga')}`;
+}
+
+export function rotuloDeHorario({ hora, vagas }) {
+  return `${hora} · ${plural(vagas, 'vaga')}`;
 }

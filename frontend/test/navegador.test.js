@@ -6,9 +6,12 @@ import { cabecalhos, MENSAGENS, mensagemDeErro } from '../public/js/lib/api.js';
 import { corpoDaLista, erroDaBusca } from '../public/js/lib/usuarios.js';
 import {
   corpoDaListaDeOcis,
+  indicadorDePrazo,
   instanteDe,
   ROTULO_ETAPA,
   ROTULO_OCI,
+  rotuloDeDia,
+  rotuloDeHorario,
   seloDaSituacao,
   valorDeDataLocal,
 } from '../public/js/lib/ocis.js';
@@ -59,6 +62,44 @@ describe('OCIs', () => {
   it('valor do campo de data é local, sem segundos', () => {
     const instante = new Date(2026, 10, 5, 14, 30, 45).toISOString();
     assert.equal(valorDeDataLocal(instante), '2026-11-05T14:30');
+  });
+
+  it('indicador de prazo: cor, ícone e texto', () => {
+    const aberta = (dias, atrasada = false) => ({
+      status: 'aberta',
+      dias_restantes: dias,
+      atrasada,
+    });
+    assert.deepEqual(indicadorDePrazo(aberta(30)), {
+      nivel: 'no-prazo',
+      icone: '●',
+      texto: 'Faltam 30 dias',
+    });
+    assert.equal(indicadorDePrazo(aberta(8)).nivel, 'no-prazo');
+    assert.equal(indicadorDePrazo(aberta(7)).nivel, 'alerta');
+    assert.equal(indicadorDePrazo(aberta(1)).texto, 'Falta 1 dia');
+    assert.deepEqual(indicadorDePrazo(aberta(0)), {
+      nivel: 'alerta',
+      icone: '●',
+      texto: 'Vence hoje',
+    });
+    assert.deepEqual(indicadorDePrazo(aberta(-3, true)), {
+      nivel: 'atrasada',
+      icone: '▲',
+      texto: 'Atrasada há 3 dias',
+    });
+    assert.equal(indicadorDePrazo(aberta(-1, true)).texto, 'Atrasada há 1 dia');
+    assert.equal(indicadorDePrazo(aberta(0, true)).texto, 'Atrasada hoje');
+    assert.equal(
+      indicadorDePrazo({ status: 'concluida', dias_restantes: null, atrasada: false }).nivel,
+      'encerrada',
+    );
+  });
+
+  it('rótulos de dia e horário com vagas', () => {
+    assert.equal(rotuloDeDia({ data: '2026-11-05', vagas: 3 }), 'qui 05/11 · 3 vagas');
+    assert.equal(rotuloDeDia({ data: '2026-11-08', vagas: 1 }), 'dom 08/11 · 1 vaga');
+    assert.equal(rotuloDeHorario({ hora: '09:30', vagas: 2 }), '09:30 · 2 vagas');
   });
 
   it('rótulos de situação, inclusive valor desconhecido', () => {
