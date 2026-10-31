@@ -91,6 +91,7 @@ Serviços (Consulta Ortopédia, Consulta Oncologista, Exame Sangue, Exame Mamogr
 **RF-12 Cadastro OCI e Navegação**
 OCI, Navegação (Marcação dos serviçso de saúde).
 - [x] Tabela: [oci] Campos: [id_oci, id_tipo_oci, cpf_paciente_hash, data_criacao, cid_hash, fk_tipo_oci_id_tipo_oci, resultado, resultado_cid_hash, status]
+- [x] Tabela: [agenda_servico] Campos: [id_agenda, id_unidade, id_servico, dia_semana, hora_inicio, hora_fim, duracao_minutos, vagas_por_horario, status], para dias e horários com vaga (ADR-0026)
 - [x] Tabela: [oci_navegacao] Campos: [id_oci_navegacao, id_oci, id_unidade, id_servico, data_hora, status]
 - [x] CRUD (exclusão lógica, com alcance por unidade — ADR-0025)
 
@@ -102,7 +103,7 @@ Relacionamentos.
 - [x] Relação log x OCI pela coluna `log.id_oci`, sem tabela `log_oci` (ADR-0025)
 - [x] Tabela: [tipo_oci_cid] Campos: [fk_tipo_oci_tipo_oci_id, fk_cid_cid_hash]
 - [x] Tabela: [unidade_saude_servico_saude] Campos: [fk_unidade_saude_id_unidade, fk_servico_saude_id_servico]
-- [ ] Tabela: [cid_servico_saude] Campos: [fk_cid_cid_hash, fk_servico_saude_id_servico]
+- [x] Tabela: [cid_servico_saude] Campos: [fk_cid_cid_hash, fk_servico_saude_id_servico]
 
 ## 4. Requisitos não funcionais / segurança
 | ID | Requisito | Verificação |
