@@ -1283,3 +1283,44 @@ form.ficha + .tabela {
   margin: 14px 0 0;
   font-weight: 600;
 }
+
+/* OCIs */
+#ficha-oci h3 {
+  margin: 18px 0 8px;
+}
+
+#ficha-oci .filtros {
+  margin-top: 12px;
+}
+
+#form-conclusao {
+  margin-top: 16px;
+}
+
+#form-conclusao textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface-muted);
+}
+
+#secao-ocis .selo {
+  white-space: nowrap;
+}
+
+#ficha-oci #oci-resultado {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+#ficha-oci,
+#form-oci {
+  margin-bottom: 24px;
+}
+
+.selo[data-status='pendente'] {
+  border: 1px solid var(--border);
+}

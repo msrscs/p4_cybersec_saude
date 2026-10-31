@@ -5,6 +5,14 @@ import { describe, it } from 'node:test';
 import { cabecalhos, MENSAGENS, mensagemDeErro } from '../public/js/lib/api.js';
 import { corpoDaLista, erroDaBusca } from '../public/js/lib/usuarios.js';
 import {
+  corpoDaListaDeOcis,
+  instanteDe,
+  ROTULO_ETAPA,
+  ROTULO_OCI,
+  seloDaSituacao,
+  valorDeDataLocal,
+} from '../public/js/lib/ocis.js';
+import {
   corpoDoFormulario,
   erroDoFormulario,
   formatarTelefone,
@@ -22,6 +30,46 @@ import {
   periodoValido,
   rotuloDaAcao,
 } from '../public/js/lib/logs.js';
+
+describe('OCIs', () => {
+  it('filtro vazio não vai na lista; CPF só com dígitos', () => {
+    assert.deepEqual(corpoDaListaDeOcis({}, null), { depois: null });
+    assert.deepEqual(
+      corpoDaListaDeOcis(
+        { status: 'aberta', tipo: '2', unidade: '3', cpf: '529.982.247-25', atrasadas: true },
+        'x',
+      ),
+      {
+        depois: 'x',
+        status: 'aberta',
+        id_tipo_oci: 2,
+        id_unidade: 3,
+        cpf: '52998224725',
+        atrasadas: true,
+      },
+    );
+  });
+
+  it('data local vira instante com fuso', () => {
+    assert.equal(instanteDe('2026-11-05T14:30'), new Date(2026, 10, 5, 14, 30).toISOString());
+    assert.equal(instanteDe(''), null);
+    assert.equal(instanteDe('qualquer'), null);
+  });
+
+  it('valor do campo de data é local, sem segundos', () => {
+    const instante = new Date(2026, 10, 5, 14, 30, 45).toISOString();
+    assert.equal(valorDeDataLocal(instante), '2026-11-05T14:30');
+  });
+
+  it('rótulos de situação, inclusive valor desconhecido', () => {
+    assert.equal(ROTULO_OCI.concluida, 'Concluída');
+    assert.equal(ROTULO_ETAPA.faltou, 'Faltou');
+    assert.equal(seloDaSituacao('aberta'), 'ativo');
+    assert.equal(seloDaSituacao('concluida'), 'pendente');
+    assert.equal(seloDaSituacao('cancelada'), 'inativo');
+    assert.equal(seloDaSituacao('faltou'), 'inativo');
+  });
+});
 
 describe('filtros de usuários', () => {
   it('filtro vazio não vai na consulta e a unidade vira número', () => {

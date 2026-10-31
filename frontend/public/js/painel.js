@@ -2,6 +2,7 @@
 // autoriza de fato é o backend, a cada requisição (ADR-0011).
 import { criarAuditoria } from './auditoria.js';
 import { CATALOGOS, criarCadastro } from './cadastros.js';
+import { criarOcis } from './ocis.js';
 import { chamar, ErroApi, quandoSessaoExpirar } from './lib/api.js';
 import { cpfValido, formatarCpf, somenteDigitos } from './lib/cpf.js';
 import { definirStatus, el, limpar, mostrarSomente } from './lib/dom.js';
@@ -108,6 +109,7 @@ function limparDados() {
   limpar($('corpo-lista'));
   limpar($('corpo-logs'));
   limpar($('corpo-usuarios'));
+  limpar($('secao-ocis'));
   for (const id of ['usuario-senha-valor', 'usuario-nome', 'usuario-cpf', 'usuario-email']) {
     $(id).textContent = '';
   }
@@ -234,8 +236,8 @@ function linhaDaLista(paciente) {
   return el(
     'tr',
     {},
-    el('td', {}, paciente.nome),
-    el('td', {}, el('code', {}, paciente.cpf_mascarado)),
+    el('td', {}, paciente.nome ?? 'Cadastro ilegível'),
+    el('td', {}, el('code', {}, paciente.cpf_mascarado ?? '—')),
     el(
       'td',
       {},
@@ -253,7 +255,7 @@ function linhaDaLista(paciente) {
         {
           type: 'button',
           class: 'link link--botao',
-          'aria-label': `Abrir ficha de ${paciente.nome}`,
+          'aria-label': `Abrir ficha de ${paciente.nome ?? 'cadastro ilegível'}`,
           onclick: () => abrirDaLista(paciente.id),
         },
         'Abrir',
@@ -440,6 +442,9 @@ async function iniciar() {
   if (temUsuarios) {
     aoAbrir['secao-usuarios'] = criarUsuarios(chamarApi, permissoes).abrir;
   }
+  const temOcis = permissoes.has('oci:ler');
+  $('menu-ocis').hidden = !temOcis;
+  if (temOcis) aoAbrir['secao-ocis'] = criarOcis(chamarApi, permissoes).abrir;
   const temCadastros = permissoes.has('cadastro:ler');
   for (const id of [
     'menu-tipos-unidade',

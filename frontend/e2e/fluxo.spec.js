@@ -21,6 +21,7 @@ test.describe.configure({ mode: 'serial' });
 let page;
 let chave;
 let ultimoPasso = -1;
+let cpfPaciente;
 const problemas = [];
 
 // O backend recusa reusar o mesmo passo TOTP (anti-replay): espera o próximo quando preciso.
@@ -96,6 +97,7 @@ test('primeiro acesso: cadastro do MFA e códigos de recuperação', async () =>
 
 test('paciente: cadastrar, buscar, editar, inativar e reativar', async () => {
   const cpf = gerarCpf();
+  cpfPaciente = cpf;
   await page.getByRole('button', { name: 'Novo paciente' }).click();
   await page.locator('#paciente-cpf').fill(cpf);
   await page.getByLabel('Nome completo').fill('Maria das Dores');
@@ -493,6 +495,7 @@ test('no celular a página não tem rolagem lateral, em nenhuma seção', async 
   const original = page.viewportSize();
   await page.setViewportSize({ width: 390, height: 800 });
   for (const secao of [
+    'OCIs',
     'Usuários',
     'Tipos de unidade',
     'Unidades',
@@ -513,6 +516,78 @@ test('no celular a página não tem rolagem lateral, em nenhuma seção', async 
   }
   await page.setViewportSize(original);
   await page.getByRole('button', { name: 'Pacientes', exact: true }).click();
+});
+
+test('OCI: abrir, encaminhar, marcar, duplicada, concluir com resultado', async () => {
+  const secao = page.locator('#secao-ocis');
+  await page.getByRole('button', { name: 'OCIs', exact: true }).click();
+  await expect(secao.getByRole('heading', { name: 'OCIs', exact: true })).toBeVisible();
+
+  await secao.getByRole('button', { name: 'Nova OCI' }).click();
+  await secao.getByLabel('CPF do paciente da OCI').fill(cpfPaciente);
+  await secao.getByLabel('Tipo da nova OCI').selectOption({ label: 'OCI Oncologia' });
+  await expect(secao.getByLabel('CID da nova OCI').locator('option')).toHaveCount(1);
+  await secao.getByLabel('Unidade da primeira etapa').selectOption({ label: 'UBS E2E' });
+  await expect(secao.getByLabel('Serviço da primeira etapa').locator('option')).toHaveCount(1);
+  await secao.getByLabel('Data e hora da primeira etapa').fill('2030-05-10T09:30');
+  await secao.locator('#form-oci').getByRole('button', { name: 'Abrir OCI' }).click();
+
+  const ficha = page.locator('#ficha-oci');
+  await expect(ficha.locator('#oci-paciente')).toHaveText('Maria das Dores Silva');
+  await expect(ficha.locator('#oci-situacao')).toHaveText('Aberta');
+  await expect(ficha.locator('#oci-cid')).toContainText('C50.9');
+  await expect(ficha.locator('#oci-cpf')).toHaveText(/^\*\*\*\.\d{3}\.\d{3}-\*\*$/);
+
+  // A lista mostra a OCI, com o CPF mascarado.
+  const linha = secao.locator('#corpo-ocis tr', { hasText: 'Maria das Dores Silva' });
+  await expect(linha).toContainText('OCI Oncologia');
+  await expect(linha.locator('code')).toHaveText(/^\*\*\*\.\d{3}\.\d{3}-\*\*$/);
+
+  // Encaminhar: nova etapa na mesma OCI, e marcar a primeira como realizada.
+  await ficha.getByLabel('Unidade do encaminhamento').selectOption({ label: 'UBS E2E' });
+  await expect(ficha.getByLabel('Serviço do encaminhamento').locator('option')).toHaveCount(1);
+  await ficha.getByLabel('Data e hora do encaminhamento').fill('2030-05-20T10:00');
+  await ficha.getByRole('button', { name: 'Incluir etapa' }).click();
+  const etapas = ficha.locator('#oci-etapas tr');
+  await expect(etapas).toHaveCount(2);
+  await etapas.first().getByRole('button', { name: 'Realizado' }).click();
+  await expect(etapas.first()).toContainText('Realizado');
+  await expect(etapas.first().getByRole('button', { name: 'Realizado' })).toHaveCount(0);
+
+  // Mesmo paciente e tipo: recusa enquanto houver OCI aberta.
+  await secao.getByRole('button', { name: 'Nova OCI' }).click();
+  await secao.getByLabel('CPF do paciente da OCI').fill(cpfPaciente);
+  await secao.getByLabel('Tipo da nova OCI').selectOption({ label: 'OCI Oncologia' });
+  await expect(secao.getByLabel('CID da nova OCI').locator('option')).toHaveCount(1);
+  await secao.getByLabel('Unidade da primeira etapa').selectOption({ label: 'UBS E2E' });
+  await expect(secao.getByLabel('Serviço da primeira etapa').locator('option')).toHaveCount(1);
+  await secao.getByLabel('Data e hora da primeira etapa').fill('2030-05-10T09:30');
+  await secao.locator('#form-oci').getByRole('button', { name: 'Abrir OCI' }).click();
+  await expect(secao.locator('#status-form-oci')).toHaveText(
+    'Este paciente já tem uma OCI aberta deste tipo.',
+  );
+  await secao.locator('#form-oci').getByRole('button', { name: 'Cancelar' }).click();
+
+  // Concluir: resultado exibido como texto, sem interpretar HTML; a ficha fica encerrada.
+  await expect(ficha).toBeVisible();
+  await ficha.getByLabel('Resultado da OCI').fill('<b>Laudo</b> de teste');
+  await ficha.getByRole('button', { name: 'Concluir OCI' }).click();
+  await expect(ficha.locator('#oci-situacao')).toHaveText('Concluída');
+  await expect(ficha.locator('#oci-resultado')).toHaveText('<b>Laudo</b> de teste');
+  await expect(ficha.locator('#oci-resultado b')).toHaveCount(0);
+  await expect(ficha.getByRole('button', { name: 'Concluir OCI' })).toBeHidden();
+  await expect(ficha.getByRole('button', { name: 'Incluir etapa' })).toBeHidden();
+
+  // Filtro por situação e por CPF.
+  await secao.getByLabel('Situação da OCI').selectOption('cancelada');
+  await secao.locator('#filtros-ocis').getByRole('button', { name: 'Filtrar' }).click();
+  await expect(secao.locator('#corpo-ocis tr')).toHaveCount(0);
+  await secao.getByLabel('Situação da OCI').selectOption('concluida');
+  await secao.getByLabel('CPF do paciente (filtro)').fill(cpfPaciente);
+  await secao.locator('#filtros-ocis').getByRole('button', { name: 'Filtrar' }).click();
+  await expect(secao.locator('#corpo-ocis tr')).toHaveCount(1);
+  await secao.locator('#filtros-ocis').getByRole('button', { name: 'Limpar filtros' }).click();
+  await ficha.getByRole('button', { name: 'Fechar OCI' }).click();
 });
 
 test('HTTPS, cookie de sessão protegido e CSRF: sem token a API recusa', async () => {
