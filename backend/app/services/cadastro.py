@@ -395,6 +395,21 @@ def _aplicar_cids(db: Session, id_tipo_oci: int, desejados: set[bytes]) -> dict[
 
 
 def _garantir_sem_uso(db: Session, registro: Registro) -> None:
+    # OCI em andamento depende destes cadastros (ADR-0025).
+    if isinstance(registro, TipoOci) and cadastro_repo.ocis_abertas_do_tipo(
+        db, registro.id_tipo_oci
+    ):
+        raise CadastroEmUso("Há OCIs abertas deste tipo: encerre-as antes de inativar.")
+    if isinstance(registro, Cid) and cadastro_repo.ocis_abertas_com_cid(db, registro.cid_hash):
+        raise CadastroEmUso("Há OCIs abertas com este CID: encerre-as antes de inativar.")
+    if isinstance(registro, UnidadeSaude) and cadastro_repo.etapas_agendadas_na_unidade(
+        db, registro.id_unidade
+    ):
+        raise CadastroEmUso("Há etapas agendadas nesta unidade: encerre-as antes de inativar.")
+    if isinstance(registro, ServicoSaude) and cadastro_repo.etapas_agendadas_com_servico(
+        db, registro.id_servico
+    ):
+        raise CadastroEmUso("Há etapas agendadas com este serviço: encerre-as antes de inativar.")
     if (
         isinstance(registro, Cid)
         and cadastro_repo.tipos_oci_ativos_com_cid(db, registro.cid_hash) > 0

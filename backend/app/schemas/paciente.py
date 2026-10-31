@@ -87,8 +87,8 @@ class PacienteAlteracao(_Entrada):
 
 class PacienteResumo(BaseModel):
     id: uuid.UUID
-    cpf_mascarado: str
-    nome: str
+    cpf_mascarado: str | None  # None: cadastro ilegível
+    nome: str | None
     status: Literal["ativo", "inativo"]
 
 

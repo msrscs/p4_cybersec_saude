@@ -7,6 +7,8 @@ from sqlalchemy.orm import InstrumentedAttribute, Session
 
 from app.models import (
     Cid,
+    Oci,
+    OciNavegacao,
     ServicoSaude,
     TipoOci,
     TipoOciCid,
@@ -108,6 +110,54 @@ def tipos_oci_ativos_com_cid(db: Session, cid_hash: bytes) -> int:
         .select_from(TipoOciCid)
         .join(TipoOci, TipoOci.id_tipo_oci == TipoOciCid.fk_tipo_oci_tipo_oci_id)
         .where(TipoOciCid.fk_cid_cid_hash == cid_hash, TipoOci.status == "ativo")
+    )
+    return int(db.scalar(consulta) or 0)
+
+
+def ativos_tipo_oci(db: Session, limite: int) -> list[TipoOci]:
+    consulta = (
+        select(TipoOci)
+        .where(TipoOci.status == "ativo")
+        .order_by(func.lower(TipoOci.tipo_oci))
+        .limit(limite)
+    )
+    return list(db.scalars(consulta))
+
+
+def ocis_abertas_do_tipo(db: Session, id_tipo_oci: int) -> int:
+    consulta = select(func.count()).where(Oci.id_tipo_oci == id_tipo_oci, Oci.status == "aberta")
+    return int(db.scalar(consulta) or 0)
+
+
+def ocis_abertas_com_cid(db: Session, cid_hash: bytes) -> int:
+    consulta = select(func.count()).where(Oci.cid_hash == cid_hash, Oci.status == "aberta")
+    return int(db.scalar(consulta) or 0)
+
+
+def etapas_agendadas_na_unidade(db: Session, id_unidade: int) -> int:
+    consulta = (
+        select(func.count())
+        .select_from(OciNavegacao)
+        .join(Oci, Oci.id_oci == OciNavegacao.id_oci)
+        .where(
+            OciNavegacao.id_unidade == id_unidade,
+            OciNavegacao.status == "agendado",
+            Oci.status == "aberta",
+        )
+    )
+    return int(db.scalar(consulta) or 0)
+
+
+def etapas_agendadas_com_servico(db: Session, id_servico: int) -> int:
+    consulta = (
+        select(func.count())
+        .select_from(OciNavegacao)
+        .join(Oci, Oci.id_oci == OciNavegacao.id_oci)
+        .where(
+            OciNavegacao.id_servico == id_servico,
+            OciNavegacao.status == "agendado",
+            Oci.status == "aberta",
+        )
     )
     return int(db.scalar(consulta) or 0)
 

@@ -293,3 +293,51 @@ class TipoOci(Base):
     cids: Mapped[list[Cid]] = relationship(
         secondary=TipoOciCid.__table__, viewonly=True, lazy="selectin", order_by=Cid.cid
     )
+
+
+# --- OCI e navegação (RF-12). O vínculo paciente x CID é dado de saúde: ver ADR-0025.
+
+
+class OciNavegacao(Base):
+    __tablename__ = "oci_navegacao"
+
+    id_oci_navegacao: Mapped[int] = mapped_column(
+        BigInteger, Identity(always=True), primary_key=True
+    )
+    id_oci: Mapped[int] = mapped_column(BigInteger, ForeignKey("app.oci.id_oci"))
+    id_unidade: Mapped[int] = mapped_column(ForeignKey(UnidadeSaude.id_unidade))
+    id_servico: Mapped[int] = mapped_column(ForeignKey(ServicoSaude.id_servico))
+    data_hora: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True))
+    status: Mapped[str] = mapped_column(Text, default="agendado")
+    unidade: Mapped[UnidadeSaude] = relationship(lazy="selectin")
+    servico: Mapped[ServicoSaude] = relationship(lazy="selectin")
+
+
+class Oci(Base):
+    __tablename__ = "oci"
+
+    id_oci: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    id_publico: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), unique=True)
+    id_tipo_oci: Mapped[int] = mapped_column(ForeignKey(TipoOci.id_tipo_oci))
+    cpf_paciente_hash: Mapped[bytes] = mapped_column(BYTEA, ForeignKey(Paciente.cpf_hash))
+    cid_hash: Mapped[bytes] = mapped_column(BYTEA, ForeignKey(Cid.cid_hash))
+    data_criacao: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=FetchedValue()
+    )
+    prazo_em: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True))
+    resultado_cripto: Mapped[bytes | None] = mapped_column(BYTEA)
+    dek_cripto: Mapped[bytes | None] = mapped_column(BYTEA)
+    kek_versao: Mapped[int | None] = mapped_column(SmallInteger)
+    resultado_cid_hash: Mapped[bytes | None] = mapped_column(BYTEA, ForeignKey(Cid.cid_hash))
+    status: Mapped[str] = mapped_column(Text, default="aberta")
+    tipo: Mapped[TipoOci] = relationship(lazy="selectin")
+    cid: Mapped[Cid] = relationship(foreign_keys=[cid_hash], lazy="selectin")
+    resultado_cid: Mapped[Cid | None] = relationship(
+        foreign_keys=[resultado_cid_hash], lazy="selectin"
+    )
+    navegacoes: Mapped[list[OciNavegacao]] = relationship(
+        lazy="selectin", order_by=OciNavegacao.data_hora
+    )
+
+    def __repr__(self) -> str:  # nunca expor campos, nem cifrados
+        return "<Oci>"

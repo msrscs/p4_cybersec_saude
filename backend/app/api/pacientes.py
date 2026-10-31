@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 from app.api.auth import SEM_CACHE, Config, Ctx, erro
 from app.api.deps import Db, exigir, limitar
 from app.core.cpf import formatar_cpf, mascarar_cpf
+from app.core.crypto import ErroCriptografia
 from app.schemas.auth import ErroResposta
 from app.schemas.paciente import (
     PacienteAlteracao,
@@ -31,6 +32,7 @@ from app.services.paciente import (
     DadosPaciente,
     ErroCadastroPaciente,
     NovoPaciente,
+    PacienteComOciAberta,
     PacienteInativo,
 )
 from app.services.sessao import SessaoAtual
@@ -122,7 +124,7 @@ def listar(
         itens=[
             PacienteResumo(
                 id=item.id_publico,
-                cpf_mascarado=mascarar_cpf(item.cpf),
+                cpf_mascarado=None if item.cpf is None else mascarar_cpf(item.cpf),
                 nome=item.nome,
                 status="ativo" if item.status == "ativo" else "inativo",
             )
@@ -140,7 +142,10 @@ def listar(
 def obter(
     id_paciente: uuid.UUID, atual: Leitor, db: Db, settings: Config, ctx: Ctx, response: Response
 ) -> PacienteResposta | JSONResponse:
-    dados = paciente_service.obter(db, settings, id_paciente, atual.cpf_hash, ctx)
+    try:
+        dados = paciente_service.obter(db, settings, id_paciente, atual.cpf_hash, ctx)
+    except ErroCriptografia:
+        return erro(status.HTTP_409_CONFLICT, "Não foi possível ler este cadastro.")
     if dados is None:
         return erro(status.HTTP_404_NOT_FOUND, NAO_ENCONTRADO)
     response.headers.update(SEM_CACHE)
@@ -185,9 +190,13 @@ def atualizar(
 
 
 def _status(id_paciente: uuid.UUID, ativo: bool, atual: SessaoAtual, db: Db, ctx: Ctx) -> Response:
-    if not paciente_service.alterar_status(
-        db, id_paciente, ativo=ativo, autor=atual.cpf_hash, ctx=ctx
-    ):
+    try:
+        existe = paciente_service.alterar_status(
+            db, id_paciente, ativo=ativo, autor=atual.cpf_hash, ctx=ctx
+        )
+    except PacienteComOciAberta as exc:
+        return erro(status.HTTP_409_CONFLICT, str(exc))
+    if not existe:
         return erro(status.HTTP_404_NOT_FOUND, NAO_ENCONTRADO)
     return Response(status_code=status.HTTP_204_NO_CONTENT, headers=SEM_CACHE)
 

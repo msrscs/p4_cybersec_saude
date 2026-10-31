@@ -39,6 +39,12 @@ class Evento(StrEnum):
     ACCESS_DENIED = "access_denied"
     ROLE_CHANGE = "role_change"
     SENSITIVE_DATA_ACCESS = "sensitive_data_access"
+    OCI_CREATED = "oci_created"
+    OCI_UPDATED = "oci_updated"
+    OCI_CONCLUDED = "oci_concluded"
+    OCI_CANCELED = "oci_canceled"
+    NAVIGATION_CREATED = "navigation_created"
+    NAVIGATION_UPDATED = "navigation_updated"
     PATIENT_CREATED = "patient_created"
     PATIENT_UPDATED = "patient_updated"
     PATIENT_DEACTIVATED = "patient_deactivated"
@@ -61,6 +67,7 @@ def registrar(
     *,
     cpf_usuario_hash: bytes | None = None,
     cpf_paciente_hash: bytes | None = None,
+    id_oci: int | None = None,
     resumo: dict[str, Any] | None = None,
 ) -> None:
     log_repo.registrar(
@@ -68,6 +75,7 @@ def registrar(
         acao=evento.value,
         cpf_usuario_hash=cpf_usuario_hash,
         cpf_paciente_hash=cpf_paciente_hash,
+        id_oci=id_oci,
         ip_origem=ctx.ip,
         request_id=ctx.request_id,
         resumo=resumo,

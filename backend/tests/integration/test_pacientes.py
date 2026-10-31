@@ -280,7 +280,11 @@ def test_permissoes_por_perfil(
         extras += ["log:ver_cpf", *(f"usuario:{a}" for a in USUARIO_ACOES)]
         extras += ["cadastro:gerenciar"]
     if perfil in ("Administrador", "Gestor", "Gestor do Cuidado", "Navegador"):
-        extras += ["cadastro:ler"]
+        extras += ["cadastro:ler", "oci:ler"]
+    if perfil in ("Administrador", "Navegador"):
+        extras += ["oci:criar", "oci:editar", "oci:concluir"]
+    if perfil in ("Administrador", "Gestor"):
+        extras += ["oci:todas_unidades"]
     assert permissoes == sorted([*esperadas, *extras])
 
 
@@ -343,6 +347,28 @@ def test_lista_com_cursor_desconhecido_nao_devolve_dados(admin: TestClient) -> N
 def test_lista_exige_token_csrf(admin: TestClient) -> None:
     del admin.headers["X-CSRF-Token"]
     assert admin.post("/pacientes/lista", json={}).status_code == 403
+
+
+def test_cadastro_adulterado_nao_derruba_a_lista(
+    admin: TestClient, fabrica_sessao: Fabrica
+) -> None:
+    bom = admin.post("/pacientes", json=_novo(nome="Paciente Legivel")).json()
+    ruim = admin.post("/pacientes", json=_novo()).json()
+    with fabrica_sessao() as db, db.begin():
+        registro = db.scalars(
+            select(Paciente).where(Paciente.id_publico == uuid.UUID(ruim["id"]))
+        ).one()
+        registro.nome_cripto = b"adulterado" * 8
+    resp = admin.post("/pacientes/lista", json={})
+    assert resp.status_code == 200
+    itens = {i["id"]: i for i in resp.json()["itens"]}
+    assert itens[ruim["id"]]["nome"] is None and itens[ruim["id"]]["cpf_mascarado"] is None
+    assert itens[bom["id"]]["nome"] == "Paciente Legivel"
+    evento = _eventos(fabrica_sessao, "sensitive_data_access")[-1]
+    assert evento.resumo_acessado["ilegiveis"] == [ruim["id"]]
+    assert admin.get(f"/pacientes/{ruim['id']}").json() == {
+        "detail": "Não foi possível ler este cadastro."
+    }
 
 
 def test_lista_auditada_sem_dado_pessoal(admin: TestClient, fabrica_sessao: Fabrica) -> None:

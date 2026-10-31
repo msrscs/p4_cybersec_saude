@@ -35,6 +35,7 @@ class LogItem(BaseModel):
     paciente: str | None
     usuario_cpf: str | None = Field(repr=False)  # só com log:ver_cpf; nunca gravado no log
     paciente_cpf: str | None = Field(repr=False)
+    id_oci: int | None
     pacientes_lista: list[str] = Field(repr=False)  # eventos de lista: CPF ou hash de cada um
     hash: str
     resumo: dict[str, Any]

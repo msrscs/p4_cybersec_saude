@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings
 from app.core.crypto import (
     DekCifrada,
+    ErroCriptografia,
     FinalidadeHash,
     abrir_dek,
     cifrar_campo,
@@ -22,6 +23,7 @@ from app.core.crypto import (
     hash_busca,
 )
 from app.models import Paciente
+from app.repositories import oci as oci_repo
 from app.repositories import paciente as paciente_repo
 from app.services import auditoria
 from app.services.auditoria import ContextoRequisicao, Evento
@@ -37,6 +39,11 @@ class ErroCadastroPaciente(Exception):
 
 class PacienteInativo(Exception):
     pass
+
+
+class PacienteComOciAberta(Exception):
+    def __init__(self) -> None:
+        super().__init__("Este paciente tem OCI aberta: conclua ou cancele antes de inativar.")
 
 
 @dataclass(frozen=True)
@@ -64,8 +71,8 @@ class ResumoPaciente:
     """Só o necessário para reconhecer o paciente na lista (minimização, ADR-0014)."""
 
     id_publico: uuid.UUID
-    cpf: str = field(repr=False)
-    nome: str = field(repr=False)
+    cpf: str | None = field(repr=False)  # None: cadastro ilegível (AES-GCM recusou)
+    nome: str | None = field(repr=False)
     status: str
 
 
@@ -162,19 +169,21 @@ def listar(
             return PaginaPacientes(itens=[], proximo=None)
     linhas = paciente_repo.listar(db, limite=TAMANHO_PAGINA + 1, depois=referencia)
     pagina = linhas[:TAMANHO_PAGINA]
+    itens = [_resumo_tolerante(settings, p) for p in pagina]
+    resumo: dict[str, object] = {
+        "recurso": _TABELA,
+        "origem": "lista",
+        "pacientes": [str(p.id_publico) for p in pagina],
+    }
+    # Falha do AES-GCM é sinal de adulteração: fica no log, e a lista segue utilizável.
+    ilegiveis = [str(i.id_publico) for i in itens if i.nome is None]
+    if ilegiveis:
+        resumo["ilegiveis"] = ilegiveis
     auditoria.registrar(
-        db,
-        Evento.SENSITIVE_DATA_ACCESS,
-        ctx,
-        cpf_usuario_hash=autor,
-        resumo={
-            "recurso": _TABELA,
-            "origem": "lista",
-            "pacientes": [str(p.id_publico) for p in pagina],
-        },
+        db, Evento.SENSITIVE_DATA_ACCESS, ctx, cpf_usuario_hash=autor, resumo=resumo
     )
     return PaginaPacientes(
-        itens=[_resumir(settings, p) for p in pagina],
+        itens=itens,
         proximo=pagina[-1].id_publico if len(linhas) > TAMANHO_PAGINA else None,
     )
 
@@ -223,6 +232,8 @@ def alterar_status(
     if paciente is None:
         return False
     novo = "ativo" if ativo else "inativo"
+    if not ativo and oci_repo.abertas_do_paciente(db, paciente.cpf_hash) > 0:
+        raise PacienteComOciAberta
     if paciente.status != novo:
         paciente.status = novo
         db.flush()
@@ -279,7 +290,16 @@ def cpf_em_claro(settings: Settings, paciente: Paciente) -> str:
     )
 
 
-def _resumir(settings: Settings, paciente: Paciente) -> ResumoPaciente:
+def _resumo_tolerante(settings: Settings, paciente: Paciente) -> ResumoPaciente:
+    try:
+        return resumir(settings, paciente)
+    except ErroCriptografia:
+        return ResumoPaciente(
+            id_publico=paciente.id_publico, cpf=None, nome=None, status=paciente.status
+        )
+
+
+def resumir(settings: Settings, paciente: Paciente) -> ResumoPaciente:
     dek = _dek(settings, paciente)
     chave = paciente.cpf_hash
     return ResumoPaciente(

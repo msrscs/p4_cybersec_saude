@@ -51,6 +51,7 @@ class ItemLog:
     paciente: str | None
     usuario_cpf: str | None = field(repr=False)
     paciente_cpf: str | None = field(repr=False)
+    id_oci: int | None
     pacientes_lista: list[str] = field(repr=False)  # eventos de lista: CPF ou hash de cada um
     hash: str
     resumo: dict[str, Any]
@@ -209,6 +210,7 @@ def _item(
         paciente=_curto(linha.cpf_paciente_hash),
         usuario_cpf=usuarios.get(linha.cpf_usuario_hash or b""),
         paciente_cpf=pacientes.get(linha.cpf_paciente_hash or b""),
+        id_oci=linha.id_oci,
         pacientes_lista=[pacientes.get(h) or h.hex()[:_TAMANHO_HASH] for h in hashes_listados],
         hash=linha.hash_assinatura_worm.hex()[:_TAMANHO_HASH],
         resumo=linha.resumo_acessado,
