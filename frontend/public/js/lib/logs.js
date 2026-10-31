@@ -28,6 +28,7 @@ const ROTULOS = {
   oci_canceled: 'OCI cancelada',
   oci_concluded: 'OCI concluída',
   oci_created: 'OCI aberta',
+  oci_dashboard_read: 'Dashboard de OCIs consultado',
   oci_updated: 'OCI alterada',
   patient_created: 'Paciente cadastrado',
   patient_deactivated: 'Paciente inativado',

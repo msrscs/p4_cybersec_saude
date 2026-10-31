@@ -9,7 +9,7 @@ const ROTAS = [
   /^\/auth\/(login|sessao|logout|senha)$/,
   /^\/auth\/mfa\/(cadastro|ativar|verificar|recuperar|codigos)$/,
   /^\/logs\/(consulta|acoes|integridade)$/,
-  /^\/ocis(\/lista|\/opcoes)?$/,
+  /^\/ocis(\/lista|\/opcoes|\/dashboard)?$/,
   /^\/ocis\/opcoes\/tipos\/[1-9][0-9]{0,9}\/cids$/,
   /^\/ocis\/opcoes\/cids\/[0-9a-f]{64}\/unidades$/,
   /^\/ocis\/opcoes\/unidades\/[1-9][0-9]{0,9}\/servicos\/[1-9][0-9]{0,9}\/dias$/,

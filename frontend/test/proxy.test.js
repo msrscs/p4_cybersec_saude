@@ -107,6 +107,7 @@ describe('repasse /api para o backend', () => {
     ['GET', '/servicos/opcoes'],
     ['POST', '/ocis'],
     ['POST', '/ocis/lista'],
+    ['POST', '/ocis/dashboard'],
     ['GET', '/ocis/opcoes'],
     ['GET', '/ocis/opcoes/tipos/3/cids'],
     ['GET', `/ocis/opcoes/cids/${'a'.repeat(64)}/unidades`],

@@ -23,6 +23,15 @@
           </picture>
         </a>
         <nav class="lateral__menu" aria-label="Principal" id="menu" hidden>
+          <button
+            type="button"
+            class="menu__item"
+            data-secao="secao-dashboard"
+            id="menu-dashboard"
+            hidden
+          >
+            Dashboard
+          </button>
           <button type="button" class="menu__item" data-secao="secao-pacientes" id="menu-pacientes">
             Pacientes
           </button>
@@ -126,6 +135,14 @@
               autocomplete="off"
             ></form>
           </section>
+
+          <!-- Dashboard de OCIs: o conteúdo é montado por dashboard.js -->
+          <section
+            class="painel"
+            id="secao-dashboard"
+            hidden
+            aria-labelledby="titulo-dashboard"
+          ></section>
 
           <!-- Pacientes -->
           <section class="painel" id="secao-pacientes" hidden aria-labelledby="titulo-pacientes">

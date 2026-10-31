@@ -5,6 +5,23 @@ import { describe, it } from 'node:test';
 import { cabecalhos, MENSAGENS, mensagemDeErro } from '../public/js/lib/api.js';
 import { corpoDaLista, erroDaBusca } from '../public/js/lib/usuarios.js';
 import {
+  comEncerradas,
+  corpoDoDashboard,
+  formatarDias,
+  formatarPercentual,
+  indicadoresDe,
+  indiceMaisProximo,
+  marcasDoEixo,
+  posicoesComRotulo,
+  rotuloDoPeriodo,
+  segmentosDeEtapas,
+  segmentosDePrazo,
+  SERIES_DE_ETAPA,
+  temDados,
+  tituloDoPeriodo,
+  totalDaLinha,
+} from '../public/js/lib/dashboard.js';
+import {
   corpoDaListaDeOcis,
   indicadorDePrazo,
   instanteDe,
@@ -33,6 +50,117 @@ import {
   periodoValido,
   rotuloDaAcao,
 } from '../public/js/lib/logs.js';
+
+describe('Dashboard de OCIs', () => {
+  const etapas = { agendado: 2, realizado: 6, faltou: 2, cancelado: 1, remarcado: 3 };
+  const dados = {
+    abertas: { em_aberto: 10, atrasadas: 2, vencem_em_breve: 3 },
+    conclusoes: { concluidas: 4, no_prazo: 3, mediana_dias: 12.25 },
+    etapas,
+    abertas_no_periodo: 1,
+    proximas_etapas: 5,
+  };
+
+  it('filtro vazio não vai no corpo, e números vão como número', () => {
+    assert.deepEqual(corpoDoDashboard({ dias: '90', tipo: '', unidade: '' }), { dias: 90 });
+    assert.deepEqual(corpoDoDashboard({ dias: '30', tipo: '2', unidade: '3' }), {
+      dias: 30,
+      id_tipo_oci: 2,
+      id_unidade: 3,
+    });
+  });
+
+  it('sem base de cálculo mostra traço, nunca 0%', () => {
+    assert.equal(formatarPercentual(0, 0), '—');
+    assert.equal(formatarPercentual(0, 5), '0%');
+    assert.equal(formatarPercentual(2, 3), '67%');
+    assert.equal(formatarDias(null), '—');
+    assert.equal(formatarDias(1), '1 dia');
+    assert.equal(formatarDias(12.25), '12,3 dias');
+  });
+
+  it('indicadores calculam as taxas e só atrasada dá alerta', () => {
+    const [aberto, atrasadas, noPrazo, mediana, faltas, proximas] = indicadoresDe(dados);
+    assert.equal(aberto.valor, '10');
+    assert.match(aberto.detalhe, /^1 aberta no período$/);
+    assert.equal(atrasadas.valor, '2');
+    assert.equal(atrasadas.alerta, true);
+    assert.equal(noPrazo.valor, '75%');
+    assert.equal(mediana.valor, '12,3 dias');
+    assert.equal(faltas.valor, '25%');
+    assert.match(faltas.detalhe, /^2 de 8 etapas encerradas$/);
+    assert.equal(proximas.valor, '5');
+    const semAtraso = indicadoresDe({
+      ...dados,
+      abertas: { em_aberto: 1, atrasadas: 0, vencem_em_breve: 0 },
+    });
+    assert.equal(semAtraso[1].alerta, false);
+  });
+
+  it('prazo soma o total e usa o mesmo ícone da lista para atrasada', () => {
+    const partes = segmentosDePrazo(dados.abertas);
+    assert.deepEqual(
+      partes.map((p) => p.valor),
+      [5, 3, 2],
+    );
+    assert.equal(partes.at(-1).icone, '▲');
+  });
+
+  it('cancelada e remarcada viram uma parte só, sem perder contagem', () => {
+    const partes = segmentosDeEtapas(etapas);
+    assert.equal(
+      partes.reduce((soma, p) => soma + p.valor, 0),
+      14,
+    );
+    assert.equal(partes.at(-1).valor, 4);
+    assert.equal(totalDaLinha(comEncerradas(etapas), SERIES_DE_ETAPA), 14);
+  });
+
+  it('eixo usa números redondos, inteiros, e cobre o máximo', () => {
+    assert.deepEqual(marcasDoEixo(0), [0, 1]);
+    assert.deepEqual(marcasDoEixo(1), [0, 1]);
+    assert.deepEqual(marcasDoEixo(3), [0, 1, 2, 3]);
+    assert.deepEqual(marcasDoEixo(37), [0, 10, 20, 30, 40]);
+    for (const maximo of [2, 7, 99, 1234]) {
+      const marcas = marcasDoEixo(maximo);
+      assert.ok(marcas.at(-1) >= maximo);
+      assert.ok(marcas.every(Number.isInteger));
+    }
+  });
+
+  it('período: semana pelo dia, mês abreviado', () => {
+    assert.equal(rotuloDoPeriodo('2026-10-05', 'week'), '05/10');
+    assert.equal(tituloDoPeriodo('2026-10-05', 'week'), 'Semana de 05/10');
+    assert.equal(rotuloDoPeriodo('2026-01-01', 'month'), 'jan/26');
+    assert.equal(tituloDoPeriodo('2026-12-01', 'month'), 'dez/26');
+  });
+
+  it('cursor encontra o ponto mais próximo e fica dentro do gráfico', () => {
+    assert.equal(indiceMaisProximo(50, 1, 0, 100), 0);
+    assert.equal(indiceMaisProximo(49, 3, 0, 100), 1);
+    assert.equal(indiceMaisProximo(-20, 3, 0, 100), 0);
+    assert.equal(indiceMaisProximo(500, 3, 0, 100), 2);
+  });
+
+  it('rótulos do eixo não passam do máximo e mantêm o último período', () => {
+    assert.deepEqual(posicoesComRotulo(3, 6), [0, 1, 2]);
+    const posicoes = posicoesComRotulo(14, 4);
+    assert.ok(posicoes.length <= 4);
+    assert.equal(posicoes.at(-1), 13);
+  });
+
+  it('tem dados só quando há OCI ou etapa', () => {
+    const zerado = {
+      abertas: { em_aberto: 0 },
+      abertas_no_periodo: 0,
+      conclusoes: { concluidas: 0 },
+      etapas: { agendado: 0, realizado: 0, faltou: 0, cancelado: 0, remarcado: 0 },
+    };
+    assert.equal(temDados(zerado), false);
+    assert.equal(temDados({ ...zerado, etapas: { ...zerado.etapas, remarcado: 1 } }), true);
+    assert.equal(temDados({ ...zerado, abertas: { em_aberto: 1 } }), true);
+  });
+});
 
 describe('OCIs', () => {
   it('filtro vazio não vai na lista; CPF só com dígitos', () => {

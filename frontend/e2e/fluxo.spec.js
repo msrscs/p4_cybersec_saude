@@ -91,8 +91,18 @@ test('primeiro acesso: cadastro do MFA e códigos de recuperação', async () =>
   await page.getByLabel('Guardei meus códigos em local seguro.').check();
   await continuar.click();
   await expect(page).toHaveURL(/\/painel$/);
-  await expect(page.getByRole('heading', { name: 'Pacientes', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
   await expect(page.locator('#tempo-sessao')).toHaveText(/Sessão: 1[45]:\d\d/);
+});
+
+test('dashboard: é o primeiro item do menu e abre vazio, sem erro', async () => {
+  await expect(page.locator('#menu .menu__item').first()).toHaveText('Dashboard');
+  await expect(page.locator('#menu-dashboard')).toHaveAttribute('aria-current', 'page');
+  await expect(page.locator('#secao-dashboard .form__status')).toHaveText(
+    'Nenhuma OCI encontrada com esses filtros.',
+  );
+  await expect(page.locator('#secao-dashboard .indicador')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Pacientes', exact: true }).click();
 });
 
 test('paciente: cadastrar, buscar, editar, inativar e reativar', async () => {
@@ -495,6 +505,7 @@ test('no celular a página não tem rolagem lateral, em nenhuma seção', async 
   const original = page.viewportSize();
   await page.setViewportSize({ width: 390, height: 800 });
   for (const secao of [
+    'Dashboard',
     'OCIs',
     'Usuários',
     'Tipos de unidade',
@@ -642,6 +653,51 @@ test('OCI: agenda, marcar por dia e horário, remarcar, prazo, duplicada e concl
   await ficha.getByRole('button', { name: 'Fechar OCI' }).click();
 });
 
+test('dashboard: indicadores, gráficos, filtros e dados em tabela, no celular também', async () => {
+  await page.getByRole('button', { name: 'Dashboard', exact: true }).click();
+  const secao = page.locator('#secao-dashboard');
+  await expect(secao.locator('.indicador').first()).toBeVisible();
+  await expect(secao.locator('.indicador', { hasText: 'Concluídas no prazo' })).toContainText(
+    '100%',
+  );
+  await expect(secao.locator('.linhas svg .traco')).toHaveCount(2);
+
+  // O tipo tem HTML no nome em outros testes: aqui nada de nome da API vira marcação.
+  await expect(secao.locator('.cartao-grafico b')).toHaveCount(0);
+  const tipos = secao.locator('.cartao-grafico', { hasText: 'OCIs por tipo' });
+  const barra = tipos.locator('.barra').first();
+  await barra.focus();
+  await expect(secao.locator('.dica-grafico')).toBeVisible();
+  await expect(secao.locator('.dica-grafico')).toContainText('Concluída');
+  await barra.blur();
+  await expect(secao.locator('.dica-grafico')).toBeHidden();
+
+  // Teclado no gráfico de linhas: as setas percorrem os períodos.
+  await secao.locator('.linhas').focus();
+  await expect(secao.locator('.dica-grafico')).toBeVisible();
+  await page.keyboard.press('ArrowLeft');
+  await expect(secao.locator('.dica-grafico')).toContainText('Abertas');
+  await secao.locator('.linhas').blur();
+
+  await tipos.getByText('Ver dados').click();
+  await expect(tipos.locator('table tbody tr').first()).toBeVisible();
+
+  // Filtro de unidade tira o gráfico por unidade, que teria uma barra só.
+  await expect(secao.locator('.cartao-grafico', { hasText: 'Etapas por unidade' })).toBeVisible();
+  await secao.getByLabel('Unidade', { exact: true }).selectOption({ index: 1 });
+  await expect(secao.locator('.cartao-grafico', { hasText: 'Etapas por unidade' })).toBeHidden();
+  await secao.getByLabel('Unidade', { exact: true }).selectOption({ index: 0 });
+  await secao.getByLabel('Período').selectOption('365');
+  await expect(secao.locator('.cartao-grafico', { hasText: 'Por mês' })).toBeVisible();
+
+  const original = page.viewportSize();
+  await page.setViewportSize({ width: 390, height: 800 });
+  await expect(secao.locator('.linhas svg')).toHaveAttribute('width', /^(2|3)\d\d$/);
+  const largura = await page.evaluate(() => document.documentElement.scrollWidth);
+  expect(largura).toBeLessThanOrEqual(390);
+  await page.setViewportSize(original);
+});
+
 test('HTTPS, cookie de sessão protegido e CSRF: sem token a API recusa', async () => {
   expect(new URL(page.url()).protocol).toBe('https:');
   const cookies = await page.context().cookies();
@@ -673,5 +729,5 @@ test('novo login pede o código do aplicativo', async () => {
     .fill(await codigoNovo());
   await page.getByRole('button', { name: 'Confirmar' }).click();
   await expect(page).toHaveURL(/\/painel$/);
-  await expect(page.getByRole('heading', { name: 'Pacientes', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
 });

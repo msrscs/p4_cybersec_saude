@@ -2,6 +2,7 @@
 // autoriza de fato é o backend, a cada requisição (ADR-0011).
 import { criarAuditoria } from './auditoria.js';
 import { CATALOGOS, criarCadastro } from './cadastros.js';
+import { criarDashboard } from './dashboard.js';
 import { criarOcis } from './ocis.js';
 import { chamar, ErroApi, quandoSessaoExpirar } from './lib/api.js';
 import { cpfValido, formatarCpf, somenteDigitos } from './lib/cpf.js';
@@ -109,6 +110,7 @@ function limparDados() {
   limpar($('corpo-lista'));
   limpar($('corpo-logs'));
   limpar($('corpo-usuarios'));
+  limpar($('secao-dashboard'));
   limpar($('secao-ocis'));
   for (const id of ['usuario-senha-valor', 'usuario-nome', 'usuario-cpf', 'usuario-email']) {
     $(id).textContent = '';
@@ -444,7 +446,11 @@ async function iniciar() {
   }
   const temOcis = permissoes.has('oci:ler');
   $('menu-ocis').hidden = !temOcis;
-  if (temOcis) aoAbrir['secao-ocis'] = criarOcis(chamarApi, permissoes).abrir;
+  $('menu-dashboard').hidden = !temOcis;
+  if (temOcis) {
+    aoAbrir['secao-ocis'] = criarOcis(chamarApi, permissoes).abrir;
+    aoAbrir['secao-dashboard'] = criarDashboard(chamarApi, permissoes).abrir;
+  }
   const temCadastros = permissoes.has('cadastro:ler');
   for (const id of [
     'menu-tipos-unidade',
@@ -464,7 +470,8 @@ async function iniciar() {
   if (temLogs) aoAbrir['secao-auditoria'] = criarAuditoria(chamarApi).abrir;
   avisoDeCodigos();
   carregarLista();
-  abrir(temPacientes || !temLogs ? 'secao-pacientes' : 'secao-auditoria');
+  if (temOcis) abrir('secao-dashboard');
+  else abrir(temPacientes || !temLogs ? 'secao-pacientes' : 'secao-auditoria');
 }
 
 iniciar();
