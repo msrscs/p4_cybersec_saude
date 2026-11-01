@@ -3,7 +3,7 @@
 import secrets
 import string
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -29,6 +29,9 @@ from app.services import auth as auth_service
 from app.services import sessao as sessao_svc
 from app.services.auditoria import ContextoRequisicao, Evento
 from app.services.sessao import SessaoAtual
+
+# Senha gerada pelo sistema vale só até a primeira troca, e no máximo por este prazo (ADR-0028).
+VALIDADE_SENHA_TEMPORARIA = timedelta(hours=72)
 
 
 class ErroSenha(ValueError):
@@ -90,6 +93,9 @@ def cadastrar(
         senha_hash=senha_mod.gerar_hash(dados.senha, settings.bcrypt_rounds),
         id_unidade=dados.id_unidade,
         troca_senha_obrigatoria=dados.troca_senha_obrigatoria,
+        senha_temporaria_expira_em=(
+            datetime.now(UTC) + VALIDADE_SENHA_TEMPORARIA if dados.troca_senha_obrigatoria else None
+        ),
     )
     try:
         with db.begin_nested():
@@ -120,6 +126,16 @@ def trocar_senha(
     usuario = usuario_repo.buscar_para_login(db, atual.cpf_hash)
     if usuario is None:
         raise ErroSenha("Senha atual incorreta.")
+    if auth_service.conta_bloqueada(usuario, agora):
+        # Sem isto, uma sessão roubada testaria senhas sem parar, mesmo com a conta bloqueada.
+        auditoria.registrar(
+            db,
+            Evento.LOGIN_FAILURE,
+            ctx,
+            cpf_usuario_hash=usuario.cpf_hash,
+            resumo={"motivo": auth_service.MOTIVO_CONTA_BLOQUEADA},
+        )
+        raise ErroSenha("Senha atual incorreta.")
     if not senha_mod.verificar(senha_atual, usuario.senha_hash):
         auth_service.contar_falha(
             db, ctx, usuario, agora, motivo="senha_atual_invalida", evento=Evento.LOGIN_FAILURE
@@ -131,6 +147,7 @@ def trocar_senha(
 
     usuario.senha_hash = senha_mod.gerar_hash(nova_senha, settings.bcrypt_rounds)
     usuario.troca_senha_obrigatoria = False
+    usuario.senha_temporaria_expira_em = None
     encerradas = sessao_svc.encerrar_outras(db, atual)
     auditoria.registrar(
         db,
@@ -173,6 +190,7 @@ def resetar_acesso(
     temporaria = gerar_senha_temporaria()
     usuario.senha_hash = senha_mod.gerar_hash(temporaria, settings.bcrypt_rounds)
     usuario.troca_senha_obrigatoria = True
+    usuario.senha_temporaria_expira_em = agora + VALIDADE_SENHA_TEMPORARIA
     usuario.mfa_ativo = False
     usuario.totp_segredo_cripto = None
     usuario.totp_ultimo_passo = None

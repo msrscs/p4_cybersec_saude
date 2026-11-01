@@ -183,7 +183,7 @@ def _autenticar(
         ).sucesso
 
 
-def test_bloqueio_dobra_e_expira_e_sucesso_zera_contadores(
+def test_bloqueio_dobra_e_expira_e_senha_correta_nao_zera_contadores(
     usuario: str, fabrica_sessao: sessionmaker[Session], settings_integracao: Settings
 ) -> None:
     agora = datetime.now(UTC)
@@ -200,7 +200,8 @@ def test_bloqueio_dobra_e_expira_e_sucesso_zera_contadores(
     agora += timedelta(minutes=31)
     assert _autenticar(fabrica_sessao, settings_integracao, usuario, SENHA, agora)
     u = _usuario(fabrica_sessao, settings_integracao, usuario)
-    assert (u.falhas_login, u.bloqueios, u.bloqueado_ate) == (0, 0, None)
+    # Quem zera é o segundo fator (ADR-0028), testado em test_revisao_seguranca.
+    assert u.falhas_login == 0 and u.bloqueios == 2
 
 
 def test_rehash_quando_custo_aumenta(

@@ -2,7 +2,8 @@
 
 - Resposta idêntica para CPF inexistente, senha errada, conta inativa ou bloqueada (I5).
 - Mesmo custo de bcrypt em todos os caminhos (hash fictício quando não há o que verificar).
-- 5 falhas seguidas bloqueiam a conta: 15 min, dobrando a cada novo bloqueio, até 24 h.
+- 5 falhas seguidas bloqueiam a conta: 15 min, dobrando a cada novo bloqueio, até 24 h. Falhas de
+  senha e de MFA somam no mesmo contador, que só zera depois do segundo fator (ADR-0028).
 - O token de pré-autenticação só vale para a etapa de MFA; no banco fica só o SHA-256 dele.
 """
 
@@ -23,6 +24,7 @@ from app.services.auditoria import ContextoRequisicao, Evento
 MAX_FALHAS = 5
 BLOQUEIO_BASE = timedelta(minutes=15)
 BLOQUEIO_MAXIMO = timedelta(hours=24)
+MOTIVO_CONTA_BLOQUEADA = "conta_bloqueada_temporariamente"
 
 
 @dataclass(frozen=True)
@@ -72,15 +74,33 @@ def _motivo_recusa_previa(usuario: Usuario | None, agora: datetime) -> str | Non
         return None
     if usuario.status != "ativo":
         return "conta_" + usuario.status
-    if usuario.bloqueado_ate is not None and usuario.bloqueado_ate > agora:
-        return "conta_bloqueada_temporariamente"
+    if conta_bloqueada(usuario, agora):
+        return MOTIVO_CONTA_BLOQUEADA
+    if senha_temporaria_vencida(usuario, agora):
+        return "senha_temporaria_expirada"
     return None
+
+
+def conta_bloqueada(usuario: Usuario, agora: datetime) -> bool:
+    return usuario.bloqueado_ate is not None and usuario.bloqueado_ate > agora
+
+
+def senha_temporaria_vencida(usuario: Usuario, agora: datetime) -> bool:
+    expira_em = usuario.senha_temporaria_expira_em
+    return expira_em is not None and expira_em <= agora
 
 
 def _registrar_falha(db: Session, ctx: ContextoRequisicao, cpf_hash: bytes, motivo: str) -> None:
     auditoria.registrar(
         db, Evento.LOGIN_FAILURE, ctx, cpf_usuario_hash=cpf_hash, resumo={"motivo": motivo}
     )
+
+
+def zerar_contadores(usuario: Usuario) -> None:
+    """Só depois do segundo fator: sem isso, novos logins dariam palpites ilimitados de TOTP."""
+    usuario.falhas_login = 0
+    usuario.bloqueios = 0
+    usuario.bloqueado_ate = None
 
 
 def contar_falha(
@@ -120,9 +140,7 @@ def _sucesso(
     senha: str,
     agora: datetime,
 ) -> ResultadoLogin:
-    usuario.falhas_login = 0
-    usuario.bloqueios = 0
-    usuario.bloqueado_ate = None
+    # A senha sozinha não zera os contadores: o login só termina no segundo fator (ADR-0028).
     if senha_mod.precisa_rehash(usuario.senha_hash, settings.bcrypt_rounds):
         usuario.senha_hash = senha_mod.gerar_hash(senha, settings.bcrypt_rounds)
 

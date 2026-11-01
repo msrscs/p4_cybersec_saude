@@ -40,6 +40,7 @@ class Usuario(Base):
     totp_ultimo_passo: Mapped[int | None] = mapped_column(BigInteger)
     mfa_ativo: Mapped[bool] = mapped_column(default=False)
     troca_senha_obrigatoria: Mapped[bool] = mapped_column(default=False)
+    senha_temporaria_expira_em: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True))
     id_unidade: Mapped[int | None]
     status: Mapped[str] = mapped_column(Text, default="ativo")
     falhas_login: Mapped[int] = mapped_column(default=0)

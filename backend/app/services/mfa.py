@@ -132,7 +132,7 @@ def recuperar(
     codigo_hash = hash_busca(settings.chave_hmac, FinalidadeHash.CODIGO_RECUPERACAO, codigo)
     if not codigo_repo.usar(db, usuario.cpf_hash, codigo_hash, agora):
         return _falha(db, pre, usuario, ctx, agora, "codigo_recuperacao_invalido")
-    usuario.falhas_login = 0
+    auth_service.zerar_contadores(usuario)
     restantes = codigo_repo.restantes(db, usuario.cpf_hash)
     auditoria.registrar(
         db,
@@ -159,6 +159,16 @@ def regenerar_codigos(
     """Novo conjunto de códigos (invalida o anterior). Exige um TOTP válido na hora."""
     usuario = usuario_repo.buscar_para_login(db, atual.cpf_hash)
     if usuario is None or not usuario.mfa_ativo:
+        return None
+    if auth_service.conta_bloqueada(usuario, agora):
+        # Sem isto, uma sessão roubada testaria códigos sem parar, mesmo com a conta bloqueada.
+        auditoria.registrar(
+            db,
+            Evento.MFA_FAILURE,
+            ctx,
+            cpf_usuario_hash=usuario.cpf_hash,
+            resumo={"motivo": auth_service.MOTIVO_CONTA_BLOQUEADA},
+        )
         return None
     passo = totp.verificar(_segredo(settings, usuario), codigo, agora, usuario.totp_ultimo_passo)
     if passo is None:
@@ -208,7 +218,7 @@ def _falha(
 
 def _confirmar_fator(usuario: Usuario, passo: int) -> None:
     usuario.totp_ultimo_passo = passo
-    usuario.falhas_login = 0
+    auth_service.zerar_contadores(usuario)
 
 
 def _novos_codigos(
