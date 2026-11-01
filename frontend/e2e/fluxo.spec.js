@@ -178,6 +178,24 @@ test('códigos de recuperação: TOTP errado não derruba a sessão', async () =
   await expect(page).toHaveURL(/\/painel$/);
 });
 
+test('menu lateral segue a ordem definida', async () => {
+  const itens = await page.locator('#menu .menu__item').allTextContents();
+  expect(itens.map((item) => item.trim())).toEqual([
+    'Dashboard',
+    'OCIs',
+    'Tipos de OCI',
+    'Pacientes',
+    'Unidades',
+    'Tipos de unidade',
+    'Serviços',
+    'CID',
+    'Agendas',
+    'Usuários',
+    'Auditoria',
+    'Minha conta',
+  ]);
+});
+
 test('menu lateral fica à esquerda do conteúdo', async () => {
   const menu = await page.locator('.lateral').boundingBox();
   const conteudo = await page.locator('#conteudo').boundingBox();
