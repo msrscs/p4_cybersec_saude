@@ -14,7 +14,7 @@ services:
     env_file: .env
     ports:
       - "127.0.0.1:5433:5432"   # só acessível da sua máquina; 5433 evita o conflito
-    networks: [internal, db_host]
+    networks: [dados, db_host]        # só a API e as rotinas alcançam o banco (ADR-0028)
     entrypoint: ["/infra/iniciar.sh"]   # TLS obrigatório (ADR-0013)
     volumes:
       - cybersec_saude_pgdata:/var/lib/postgresql
@@ -71,7 +71,7 @@ services:
       - ./certs/ca.crt:/certs/ca.crt:ro
       - ./certs/backend.crt:/certs/backend.crt:ro
       - ./certs/backend.key:/certs/backend.key:ro
-    networks: [internal]          # sem porta publicada: só o frontend fala com a API
+    networks: [internal, dados]   # sem porta publicada: só o frontend fala com a API
     depends_on:
       db:
         condition: service_healthy
@@ -100,7 +100,7 @@ services:
       disable: true               # não serve HTTP
     volumes:
       - ./certs/ca.crt:/certs/ca.crt:ro
-    networks: [internal]
+    networks: [dados]
     depends_on:
       db:
         condition: service_healthy
@@ -157,6 +157,11 @@ networks:
     ipam:
       config:
         - subnet: 172.30.10.0/24
+  dados:
+    internal: true                # API e rotinas -> banco; o frontend não entra aqui
+    ipam:
+      config:
+        - subnet: 172.30.30.0/24
   borda:
     internal: true                # borda -> frontend
     ipam:
