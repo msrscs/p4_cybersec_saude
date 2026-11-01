@@ -2,7 +2,7 @@
 
 Sistema de apoio à Oferta de Cuidados Integrados (OCI) da SESAU Recife. Projeto acadêmico de Segurança da Informação.
 
-Documentação: [`docs/SPEC.md`](docs/SPEC.md), [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md), [`docs/adr/`](docs/adr/).
+Documentação: [`docs/SPEC.md`](docs/SPEC.md), [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Os ADRs e o modelo de ameaças são mantidos fora do repositório.
 
 ## Pré-requisitos
 Docker, [uv](https://docs.astral.sh/uv/) e Node.js 26.

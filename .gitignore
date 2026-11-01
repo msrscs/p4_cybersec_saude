@@ -33,3 +33,7 @@ playwright-report/
 
 # Metadados do Windows ao copiar arquivos para o WSL
 *:Zone.Identifier
+
+# Documentação interna, mantida só localmente
+docs/adr/
+docs/THREAT_MODEL.md
