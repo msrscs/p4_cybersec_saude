@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { after, before, describe, it } from 'node:test';
 
 import { createApp } from '../src/app.js';
@@ -14,6 +15,24 @@ describe('frontend', () => {
   });
 
   after(() => new Promise((resolve) => server.close(resolve)));
+
+  it('formulários usam POST: sem o JavaScript, CPF e senha não vão para a URL', () => {
+    for (const pagina of ['index.html', 'painel.html']) {
+      const html = readFileSync(new URL(`../public/${pagina}`, import.meta.url), 'utf8');
+      const formularios = html.match(/<form\b[^>]*>/g);
+      assert.ok(formularios.length > 0, pagina);
+      for (const formulario of formularios) assert.match(formulario, /method="post"/);
+    }
+  });
+
+  it('formulários montados pelo JavaScript também usam POST', () => {
+    for (const script of ['cadastros.js', 'dashboard.js', 'ocis.js']) {
+      const codigo = readFileSync(new URL(`../public/js/${script}`, import.meta.url), 'utf8');
+      const formularios = codigo.match(/el\(\s*'form',\s*\{[^}]*\}/g);
+      assert.ok(formularios.length > 0, script);
+      for (const formulario of formularios) assert.match(formulario, /method: 'post'/);
+    }
+  });
 
   it('GET /health retorna ok', async () => {
     const res = await fetch(`${baseUrl}/health`);
@@ -35,6 +54,7 @@ describe('frontend', () => {
     assert.equal(res.headers.get('x-powered-by'), null);
     assert.equal(res.headers.get('x-frame-options'), 'DENY');
     assert.equal(res.headers.get('cross-origin-opener-policy'), 'same-origin');
+    assert.equal(res.headers.get('cross-origin-embedder-policy'), 'require-corp');
     assert.equal(res.headers.get('cross-origin-resource-policy'), 'same-origin');
     assert.equal(res.headers.get('origin-agent-cluster'), '?1');
     assert.match(res.headers.get('permissions-policy'), /camera=\(\).*payment=\(\).*usb=\(\)/);

@@ -93,7 +93,7 @@
               <p>Use seu CPF e senha. Em seguida, confirme com o código do autenticador.</p>
             </header>
 
-            <form class="form" id="form-login" novalidate autocomplete="on">
+            <form method="post" class="form" id="form-login" novalidate autocomplete="on">
               <div class="field">
                 <label for="cpf">CPF</label>
                 <input
@@ -160,7 +160,7 @@
               />
             </div>
             <p class="chave">Chave: <code id="qr-chave"></code></p>
-            <form class="form" id="form-ativar" novalidate autocomplete="off">
+            <form method="post" class="form" id="form-ativar" novalidate autocomplete="off">
               <div class="field">
                 <label for="codigo-ativar">Código do aplicativo</label>
                 <input
@@ -211,7 +211,7 @@
               <h2>Confirme seu acesso</h2>
               <p id="texto-verificar">Informe o código de 6 dígitos do aplicativo autenticador.</p>
             </header>
-            <form class="form" id="form-verificar" novalidate autocomplete="off">
+            <form method="post" class="form" id="form-verificar" novalidate autocomplete="off">
               <div class="field">
                 <label for="codigo-verificar" id="rotulo-verificar">Código do aplicativo</label>
                 <input

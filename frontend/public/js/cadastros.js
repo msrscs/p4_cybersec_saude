@@ -271,6 +271,7 @@ export function criarCadastro(chamarApi, catalogo, podeGerenciar) {
   );
   const tituloForm = el('h2', {});
   const form = el('form', {
+    method: 'post',
     class: 'form ficha',
     novalidate: true,
     autocomplete: 'off',
@@ -526,7 +527,7 @@ export function criarCadastro(chamarApi, catalogo, podeGerenciar) {
 
   const formBusca = el(
     'form',
-    { class: 'busca', novalidate: true, autocomplete: 'off' },
+    { method: 'post', class: 'busca', novalidate: true, autocomplete: 'off' },
     el('label', { for: busca.id }, `Buscar em ${catalogo.titulo}`),
     el(
       'div',

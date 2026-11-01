@@ -103,7 +103,7 @@ export function criarOcis(chamarApi, permissoes) {
 
   const formFiltros = el(
     'form',
-    { class: 'filtros', id: 'filtros-ocis', novalidate: true, autocomplete: 'off' },
+    { method: 'post', class: 'filtros', id: 'filtros-ocis', novalidate: true, autocomplete: 'off' },
     campo(filtroStatus.id, 'Situação da OCI', filtroStatus),
     campo(filtroTipo.id, 'Tipo da OCI', filtroTipo),
     campo(filtroUnidade.id, 'Unidade da OCI', filtroUnidade),
@@ -149,7 +149,14 @@ export function criarOcis(chamarApi, permissoes) {
   const statusForm = status('status-form-oci');
   const formNova = el(
     'form',
-    { class: 'form ficha', id: 'form-oci', novalidate: true, autocomplete: 'off', hidden: true },
+    {
+      method: 'post',
+      class: 'form ficha',
+      id: 'form-oci',
+      novalidate: true,
+      autocomplete: 'off',
+      hidden: true,
+    },
     el('h2', {}, 'Nova OCI'),
     campo(novaCpf.id, 'CPF do paciente da OCI', novaCpf),
     campo(novaTipo.id, 'Tipo da nova OCI', novaTipo),
@@ -240,7 +247,7 @@ export function criarOcis(chamarApi, permissoes) {
   });
   const formEtapa = el(
     'form',
-    { class: 'form', id: 'form-etapa', novalidate: true, autocomplete: 'off' },
+    { method: 'post', class: 'form', id: 'form-etapa', novalidate: true, autocomplete: 'off' },
     el('h3', {}, 'Marcar nova etapa'),
     agendaEtapa.elemento,
     el(
@@ -261,7 +268,14 @@ export function criarOcis(chamarApi, permissoes) {
   const tituloRemarcar = el('h3', {}, 'Remarcar etapa');
   const formRemarcar = el(
     'form',
-    { class: 'form', id: 'form-remarcar', novalidate: true, autocomplete: 'off', hidden: true },
+    {
+      method: 'post',
+      class: 'form',
+      id: 'form-remarcar',
+      novalidate: true,
+      autocomplete: 'off',
+      hidden: true,
+    },
     tituloRemarcar,
     agendaRemarcar.elemento,
     el(
@@ -286,7 +300,7 @@ export function criarOcis(chamarApi, permissoes) {
   const resultadoCid = el('select', { id: 'oci-conclusao-cid' });
   const formConclusao = el(
     'form',
-    { class: 'form', id: 'form-conclusao', novalidate: true, autocomplete: 'off' },
+    { method: 'post', class: 'form', id: 'form-conclusao', novalidate: true, autocomplete: 'off' },
     campo(resultado.id, 'Resultado da OCI', resultado),
     campo(resultadoCid.id, 'CID do resultado (opcional)', resultadoCid),
     el(

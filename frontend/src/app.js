@@ -42,6 +42,8 @@ export function createApp({
       strictTransportSecurity: { maxAge: 63072000, includeSubDomains: true, preload: true },
       referrerPolicy: { policy: 'no-referrer' },
       xFrameOptions: { action: 'deny' },
+      // Tudo vem da própria origem: nada de fora entra na página sem autorização explícita.
+      crossOriginEmbedderPolicy: { policy: 'require-corp' },
       crossOriginOpenerPolicy: { policy: 'same-origin' },
       crossOriginResourcePolicy: { policy: 'same-origin' },
     }),

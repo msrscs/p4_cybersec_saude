@@ -227,7 +227,13 @@ export function criarDashboard(chamarApi, permissoes) {
     el('div', { class: 'field' }, el('label', { for: id }, rotulo), controle);
   const filtros = el(
     'form',
-    { class: 'filtros', id: 'filtros-dashboard', novalidate: true, autocomplete: 'off' },
+    {
+      method: 'post',
+      class: 'filtros',
+      id: 'filtros-dashboard',
+      novalidate: true,
+      autocomplete: 'off',
+    },
     campo('dashboard-periodo', 'Período', periodo),
     campo('dashboard-tipo', 'Tipo de OCI', tipo),
     todasAsUnidades ? campo('dashboard-unidade', 'Unidade', unidade) : null,

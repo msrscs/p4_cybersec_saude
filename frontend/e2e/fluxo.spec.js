@@ -196,6 +196,12 @@ test('menu lateral segue a ordem definida', async () => {
   ]);
 });
 
+test('nenhum formulário envia por GET, nem os montados pelo JavaScript', async () => {
+  await page.getByRole('button', { name: 'Unidades', exact: true }).click();
+  await expect(page.locator('#secao-unidades')).toBeVisible();
+  await expect(page.locator('form:not([method="post"])')).toHaveCount(0);
+});
+
 test('menu lateral fica à esquerda do conteúdo', async () => {
   const menu = await page.locator('.lateral').boundingBox();
   const conteudo = await page.locator('#conteudo').boundingBox();
