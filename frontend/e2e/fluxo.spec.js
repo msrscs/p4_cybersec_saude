@@ -682,6 +682,16 @@ test('dashboard: indicadores, gráficos, filtros e dados em tabela, no celular t
   await tipos.getByText('Ver dados').click();
   await expect(tipos.locator('table tbody tr').first()).toBeVisible();
 
+  // Só o cabeçalho, sobre o verde, é branco: o nome de cada linha usa a cor do texto, nos dois temas.
+  for (const colorScheme of ['light', 'dark']) {
+    await page.emulateMedia({ colorScheme });
+    const dadoDaLinha = tipos.locator('table tbody td').first();
+    const corDoDado = await dadoDaLinha.evaluate((td) => getComputedStyle(td).color);
+    await expect(tipos.locator('table tbody th').first()).toHaveCSS('color', corDoDado);
+    await expect(tipos.locator('table thead th').first()).toHaveCSS('color', 'rgb(255, 255, 255)');
+  }
+  await page.emulateMedia({ colorScheme: 'light' });
+
   // Filtro de unidade tira o gráfico por unidade, que teria uma barra só.
   await expect(secao.locator('.cartao-grafico', { hasText: 'Etapas por unidade' })).toBeVisible();
   await secao.getByLabel('Unidade', { exact: true }).selectOption({ index: 1 });

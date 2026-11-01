@@ -838,6 +838,7 @@ input.codigo {
   background: var(--surface-muted);
 }
 
+.tabela tbody tr:last-child th,
 .tabela tbody tr:last-child td {
   border-bottom: 0;
 }
@@ -1007,8 +1008,14 @@ input.codigo {
   background: linear-gradient(90deg, var(--panel-from), var(--panel-to));
 }
 
-.app .tabela th {
+.app .tabela thead th {
   color: #fff;
+  background: none;
+}
+
+/* Cabeçalho de linha (scope="row"), como no "Ver dados" do dashboard: fica sobre a faixa clara. */
+.app .tabela tbody th {
+  color: var(--text);
   background: none;
 }
 
