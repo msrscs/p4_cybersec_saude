@@ -37,3 +37,4 @@ playwright-report/
 # Documentação interna, mantida só localmente
 docs/adr/
 docs/THREAT_MODEL.md
+docs/RELATORIO_SEGURANCA.md

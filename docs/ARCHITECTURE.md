@@ -113,7 +113,7 @@ Implementação (ADR-0011): usuário → `usuario_grupo` → `grupo_papel` → `
 
 ## 8. Implantação (Docker)
 - Desenvolvimento: `db` no Docker (porta 127.0.0.1:5433, só com TLS), backend e frontend rodando no WSL.
-- Empacotamento (T01/T09, ADR-0013): serviços `edge`, `frontend`, `backend` e `tarefas` com usuário não-root, sistema de arquivos somente leitura e sem capabilities. Redes `borda` e `internal` sem saída para a internet; apenas o `edge` é exposto (`https://cybersec.localhost:8443`).
+- Empacotamento (T01/T09, ADR-0013): serviços `edge`, `frontend`, `backend` e `tarefas` com usuário não-root, sistema de arquivos somente leitura e sem capabilities. Redes `borda`, `internal` e `dados` sem saída para a internet: o `frontend` não alcança o banco, só a API e as rotinas estão na rede `dados`. Apenas o `edge` é exposto (`https://cybersec.localhost:8443`).
 - Certificados: CA interna e um certificado por serviço (`infra/gerar_certificados.sh`), em `certs/`, fora do git.
 - Segredos: `.env` fora do git; `.env.example` versionado sem valores.
 

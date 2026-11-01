@@ -21,22 +21,23 @@ Formato: RF-XX | user story | critérios de aceite.
 
 **RF-01 Cadastro Usuários**
 Como usuário, quero fazer o login, mudar a senha e recuperar o acesso ao sistema.
-- [ ] Senha com no mínimo 12 caracteres, pelo menos 1 maiúscula, pelo menos 1 minúscula, pelo menos número, pelo menos um caracter especial, validada no backend
-- [ ] Senha armazenada com dbcrypt com salt
-- [ ] Ativação do MFA obrigatória no primeiro acesso
-- [ ] Criptografar dados sensíveis
-- [ ] Tabela: [usuario] Campos: [cpf_hash, cpf_cripto, nome_cripto, email_cripto, unidade, senha_hash_salt, status]
+- [x] Senha com no mínimo 12 caracteres, pelo menos 1 maiúscula, pelo menos 1 minúscula, pelo menos número, pelo menos um caracter especial, validada no backend
+- [x] Senha armazenada com dbcrypt com salt
+- [x] Ativação do MFA obrigatória no primeiro acesso
+- [x] Criptografar dados sensíveis
+- [x] Tabela: [usuario] Campos: [cpf_hash, cpf_cripto, nome_cripto, email_cripto, unidade, senha_hash_salt, status]
 - [x] CRUD, mudança status (exclusão lógica; só Administrador — ADR-0017)
-- [ ] Conferir digitos verificador do CPF
-- [ ] Sanitizar entradas de dados
+- [x] Conferir digitos verificador do CPF
+- [x] Sanitizar entradas de dados
 
 **RF-02 Login com MFA**
 Como usuário, quero entrar com senha + código TOTP.
-- [ ] Login pelo CPF
-- [ ] Login só conclui após senha e TOTP válidos
-- [ ] 5 falhas seguidas bloqueiam a conta temporariamente
-- [ ] Códigos de recuperação de uso único (armazenados com hash)
-- [ ] Possibilidade de utilizar Google ou Microsoft Authentication ou via email
+- [x] Login pelo CPF
+- [x] Login só conclui após senha e TOTP válidos
+- [x] 5 falhas seguidas, de senha ou de MFA, bloqueiam a conta temporariamente; só o segundo fator correto zera o contador
+- [x] Códigos de recuperação de uso único (armazenados com hash)
+- [x] Google ou Microsoft Authenticator (TOTP)
+- [ ] MFA via e-mail: não implementado
 
 **RF-03 Cadastro Pacientes**
 Dados do paciente.
@@ -161,7 +162,7 @@ Cada tarefa deve ser pequena, testável e entregar valor.
 - [x] T07 Funcionalidade principal (RF-03)
 - [x] T08 Frontend: telas de login/MFA/principal
 - [x] T09 Hardening (headers, rate limit, CSRF)
-- [ ] T10 Revisão de segurança + relatório final
+- [x] T10 Revisão de segurança + relatório final
 
 ## 10. Critérios de pronto
 - Testes passando, lint e `bandit`/`npm audit` sem críticos
