@@ -1,5 +1,6 @@
 # Segredos
 certs/
+.db-ca.crt
 .env
 .env.*
 !.env.example
@@ -30,6 +31,10 @@ playwright-report/
 .vscode/
 .idea/
 .DS_Store
+
+# Backups e dumps locais do banco
+*.tgz
+*.dump
 
 # Metadados do Windows ao copiar arquivos para o WSL
 *:Zone.Identifier

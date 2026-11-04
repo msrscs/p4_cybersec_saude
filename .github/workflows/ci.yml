@@ -26,16 +26,17 @@ jobs:
       POSTGRES_DB: postgres
       DB_HOST: localhost
       DB_PORT: "5432"
+      # verify-full contra o certificado efêmero do container, copiado por subir_ci.sh (ADR-0029).
       DB_SSLMODE: verify-full
-      DB_SSLROOTCERT: ${{ github.workspace }}/certs/ca.crt
+      DB_SSLROOTCERT: ${{ github.workspace }}/.db-ca.crt
       REQUIRE_DB_TESTS: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Certificados descartáveis e Postgres com TLS obrigatório
+      - name: Postgres com TLS obrigatório
         working-directory: .
-        run: infra/gerar_certificados.sh && infra/postgres/subir_ci.sh
+        run: db/postgres/subir_ci.sh
       - name: Gera senhas aleatórias das roles para esta execução
         run: |
           echo "::add-mask::$(openssl rand -hex 24 | tee /tmp/app_pw)"
@@ -116,14 +117,15 @@ jobs:
       POSTGRES_DB: postgres
       DB_HOST: localhost
       DB_PORT: "5432"
+      # verify-full contra o certificado efêmero do container, copiado por subir_ci.sh (ADR-0029).
       DB_SSLMODE: verify-full
-      DB_SSLROOTCERT: ${{ github.workspace }}/certs/ca.crt
+      DB_SSLROOTCERT: ${{ github.workspace }}/.db-ca.crt
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Certificados descartáveis e Postgres com TLS obrigatório
-        run: infra/gerar_certificados.sh && infra/postgres/subir_ci.sh
+      - name: Postgres com TLS obrigatório
+        run: db/postgres/subir_ci.sh
       - name: Gera senhas e chaves aleatórias para esta execução
         run: |
           for nome in APP_DB_PASSWORD MIGRATOR_DB_PASSWORD; do
@@ -174,4 +176,4 @@ jobs:
           persist-credentials: false
       - run: docker build -t cybersec-saude-backend:ci backend
       - run: docker build -t cybersec-saude-frontend:ci frontend
-      - run: docker build -t cybersec-saude-edge:ci infra/caddy
+      - run: docker build -f db/Dockerfile -t cybersec-saude-db:ci .
