@@ -1,7 +1,8 @@
 """Montagem de URLs do banco a partir de partes, sem concatenar credenciais à mão.
 
-A conexão usa TLS (ADR-0013): o padrão é `verify-full` (certificado conferido contra a CA
-interna e o nome do host). `DB_SSLMODE`/`DB_SSLROOTCERT` configuram; produção exige verify-full.
+A conexão usa TLS (ADR-0013, ADR-0029): o padrão é `verify-full` (certificado conferido contra a
+CA e o nome do host; na AWS, o bundle do RDS em /etc/ssl/rds/global-bundle.pem). Local e CI usam
+`require` com o certificado efêmero do container. Produção exige verify-full.
 """
 
 import os
@@ -19,7 +20,7 @@ def parametros_tls(modo: str, raiz: str | None) -> dict[str, str]:
     if modo not in MODOS_TLS:
         raise ValueError(f"DB_SSLMODE deve ser um de: {', '.join(MODOS_TLS)}.")
     if modo == "verify-full" and not raiz:
-        raise ValueError("DB_SSLROOTCERT (CA interna) é obrigatório com DB_SSLMODE=verify-full.")
+        raise ValueError("DB_SSLROOTCERT (CA do banco) é obrigatório com DB_SSLMODE=verify-full.")
     parametros = {"sslmode": modo}
     if raiz:
         parametros["sslrootcert"] = raiz

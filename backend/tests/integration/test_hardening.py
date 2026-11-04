@@ -289,8 +289,9 @@ def test_script_de_tarefas_sem_chave_de_checkpoint(
 
 # --- TLS até o banco (I3) ----------------------------------------------------------------
 
+# Local e CI usam `require` (certificado efêmero do container) ou `verify-full` (ADR-0029).
 exige_tls = pytest.mark.skipif(
-    os.environ.get("DB_SSLMODE", "verify-full") != "verify-full",
+    os.environ.get("DB_SSLMODE", "verify-full") == "disable",
     reason="banco sem TLS neste ambiente",
 )
 
