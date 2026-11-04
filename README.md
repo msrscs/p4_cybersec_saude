@@ -4,6 +4,15 @@ Sistema de apoio à Oferta de Cuidados Integrados (OCI) da SESAU Recife. Projeto
 
 Documentação: [`docs/SPEC.md`](docs/SPEC.md), [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Os ADRs e o modelo de ameaças são mantidos fora do repositório.
 
+## Módulos
+| Pasta | Imagem | Na AWS |
+|---|---|---|
+| `frontend/` | `docker build frontend` | ECS Fargate atrás de CloudFront + ALB (TLS na borda) |
+| `backend/` | `docker build backend` | ECS Fargate, alcançado só pelo frontend; rotinas pelo EventBridge Scheduler |
+| `db/` | `docker build -f db/Dockerfile .` | Task avulsa de migrations/bootstrap contra o Aurora Serverless v2 |
+
+Variáveis por task e requisitos da infraestrutura (security groups, cabeçalho secreto de origem, `rds.force_ssl`) estão no ADR-0029.
+
 ## Pré-requisitos
 Docker, [uv](https://docs.astral.sh/uv/) e Node.js 26.
 
@@ -11,7 +20,6 @@ Docker, [uv](https://docs.astral.sh/uv/) e Node.js 26.
 ```bash
 cp .env.example .env                      # preencha os valores (POSTGRES_USER != app_user/migrator)
 cd backend && uv run python -m scripts.gerar_chaves && cd ..   # KEK, HMAC_KEY e LOG_CHECKPOINT_KEY no .env (sem exibir)
-infra/gerar_certificados.sh               # CA interna e certificados TLS em certs/ (fora do git)
 docker compose up -d db
 cd backend && uv run --env-file ../.env python -m scripts.bootstrap_db   # cria roles e schema
 cd .. && uv run --project backend --env-file .env alembic upgrade head   # aplica migrations
@@ -44,21 +52,19 @@ Recalcula a cadeia de hashes inteira, grava um checkpoint assinado e imprime a *
 cd frontend && npx playwright install chromium && sudo npx playwright install-deps chromium  # 1x
 cd backend && uv run --env-file ../.env python -m tests.e2e_ambiente
 ```
-Sobe um banco temporário, a API e o frontend em portas próprias e com TLS (certificados descartáveis), roda o fluxo completo no Chromium (login, MFA, pacientes, logout) e remove tudo no fim (ADR-0012, ADR-0013).
+Sobe um banco temporário, a API e o frontend em portas próprias (HTTP em `localhost`, como atrás da borda na AWS), roda o fluxo completo no Chromium (login, MFA, pacientes, logout) e remove tudo no fim (ADR-0012, ADR-0029).
 
 ## Subir o ambiente
 ```bash
 docker compose up --build
 ```
-Acesso em **https://cybersec.localhost:8443**. Só a borda (Caddy) fica exposta; frontend e API não publicam porta (ADR-0013). O `http://localhost:8080` só redireciona para HTTPS.
+Acesso em **http://localhost:3000**. Só o frontend publica porta; a API não (ADR-0029). O banco usa TLS obrigatório com um certificado efêmero gerado pelo próprio container, então não há certificado para criar, instalar ou renovar. Na AWS, o HTTPS fica no CloudFront/ALB.
 
-**Confiar na CA local (1x, senão o navegador mostra alerta de certificado):** importe `certs/ca.crt` como autoridade raiz do navegador. A CA só pode assinar nomes locais, então não afeta outros sites.
-- **Windows (WSL), Chrome/Edge:** copie com `cp certs/ca.crt /mnt/c/Users/SEU_USUARIO/Downloads/`, abra o arquivo no Windows e use *Instalar certificado → Usuário atual → Autoridades de Certificação Raiz Confiáveis*.
-- **Firefox:** *Configurações → Privacidade e Segurança → Certificados → Ver certificados → Autoridades → Importar*.
-
-Use sempre `cybersec.localhost`, não `localhost`: o HSTS do sistema valeria para todos os seus projetos locais (ADR-0013).
-
-Os certificados de serviço valem 397 dias: renove com `infra/gerar_certificados.sh --renovar`.
+Migrations pela imagem do módulo `db` (a mesma usada na AWS):
+```bash
+docker compose run --rm migrar                                  # alembic upgrade head
+docker compose run --rm migrar python -m scripts.bootstrap_db   # roles (1x)
+```
 
 As rotinas periódicas rodam no container `tarefas` (limpeza a cada 15 min, verificação do log a cada hora). Acompanhe com `docker logs cybersec_saude-tarefas`.
 

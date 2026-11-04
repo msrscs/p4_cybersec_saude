@@ -138,7 +138,7 @@ login_success, login_failure, mfa_success, mfa_failure, password_change, sensiti
 Campos: id, timestamp, user_id, evento, ip, detalhes (sem dados sensíveis), prev_hash, hash.
 
 ## 7. Arquitetura (resumo)
-Navegador -> Frontend Node.js -> API Python (FastAPI) -> PostgreSQL.
+Navegador -> CloudFront/ALB -> Frontend Node.js -> API Python (FastAPI) -> Aurora PostgreSQL (AWS, ADR-0029).
 Detalhes em `ARCHITECTURE.md`. Decisões em `/docs/adr`.
 
 ## 8. Ameaças principais
@@ -163,6 +163,8 @@ Cada tarefa deve ser pequena, testável e entregar valor.
 - [x] T08 Frontend: telas de login/MFA/principal
 - [x] T09 Hardening (headers, rate limit, CSRF)
 - [x] T10 Revisão de segurança + relatório final
+- [x] T11 Módulos separados para a AWS (sem Caddy/CA interna, CA do RDS, rotinas por Scheduler; ADR-0029)
+- [ ] T12 Observabilidade: OpenTelemetry (`OTEL_*`) exportando para o Grafana, sem dados sensíveis
 
 ## 10. Critérios de pronto
 - Testes passando, lint e `bandit`/`npm audit` sem críticos

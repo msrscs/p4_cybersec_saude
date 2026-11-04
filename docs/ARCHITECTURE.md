@@ -7,25 +7,30 @@ Sistema web para [descrever: ex. gestão de prontuários/consultas] com dados de
 
 ## 2. Visão geral (C4: containers)
 
+Implantação na AWS (ADR-0029):
+
 ```mermaid
 flowchart LR
-    U[Usuário no navegador] -->|HTTPS| E[Borda Caddy]
-    E -->|HTTPS verificado| F[Frontend Node.js]
-    F -->|HTTPS verificado + cookie de sessão + token CSRF| B[API Python / FastAPI]
-    B -->|SQL parametrizado, TLS verify-full| D[(PostgreSQL 18)]
-    B -->|KEK| K[Gerenciador de chaves: .env no dev, secret manager em produção]
-    T[Rotinas periódicas] -->|TLS verify-full| D
+    U[Usuário no navegador] -->|HTTPS, ACM| CF[CloudFront + WAF]
+    CF -->|HTTPS + cabeçalho secreto de origem| ALB[ALB]
+    ALB -->|HTTP na VPC, subnet privada| F[Frontend Node.js: task Fargate]
+    F -->|HTTP na VPC, Service Connect + cookie de sessão + token CSRF| B[API FastAPI: task Fargate]
+    B -->|SQL parametrizado, TLS verify-full, CA do RDS| D[(Aurora Serverless v2 PostgreSQL)]
+    B -->|KEK| K[Secrets Manager]
+    S[EventBridge Scheduler: rotinas] -->|task avulsa, imagem do backend| D
+    M[Task avulsa: imagem db, migrations] -->|TLS verify-full| D
     D --- A[(log WORM)]
 ```
 
 | Componente | Tecnologia | Responsabilidade |
 |---|---|---|
-| Borda | Caddy | Único ponto exposto: TLS na entrada, redirecionamento de HTTP, timeouts e IP real do cliente (ADR-0013) |
+| Borda | CloudFront + ALB (ACM) | Único ponto exposto: TLS na entrada, redirecionamento de HTTP, timeouts e IP real do cliente (`CloudFront-Viewer-Address`) (ADR-0029) |
 | Frontend | Node.js | Telas, fluxo de login/MFA, headers de segurança (CSP, HSTS, Trusted Types) e repasse restrito `/api` para a API, com checagem de origem (ADR-0012, ADR-0013) |
 | Backend | Python 3.14 + FastAPI | Regras de negócio, autenticação, MFA, criptografia, auditoria, token CSRF e limite por IP |
-| Tarefas | Python (mesma imagem do backend) | Limpeza de sessões e contadores, verificação periódica da cadeia do log (ADR-0013) |
-| Banco | PostgreSQL 18 (Docker) | Persistência, triggers WORM, permissões por role |
-| Chaves | Variável de ambiente (dev) | Guarda a KEK que cifra as DEKs |
+| Tarefas | Python (mesma imagem do backend), EventBridge Scheduler | Limpeza de sessões e contadores, verificação periódica da cadeia do log (ADR-0013, ADR-0029) |
+| Migrations | Imagem `db/` (Alembic) | Migrations, bootstrap das roles e importação do CID, como task avulsa (ADR-0029) |
+| Banco | Aurora Serverless v2 PostgreSQL (AWS); PostgreSQL 18 no Docker (dev) | Persistência, triggers WORM, permissões por role |
+| Chaves | Secrets Manager (AWS); `.env` (dev) | Guarda a KEK que cifra as DEKs |
 
 ## 3. Camadas do backend
 
@@ -87,7 +92,7 @@ Regras (ADR-0002, 0008, 0009): token temporário só vale para a etapa MFA; sess
 | Segredo TOTP | AES-256-GCM |
 | Dados de saúde (CPF, diagnóstico, etc.) | AES-256-GCM por campo |
 | Códigos de recuperação | Hash |
-| Em trânsito | TLS |
+| Em trânsito | TLS até a borda (CloudFront/ALB) e até o banco; HTTP só dentro da VPC (ADR-0029) |
 
 ## 6. Log de auditoria WORM
 
@@ -111,11 +116,20 @@ RBAC com perfis (usuário, profissional, administrador, auditor). Verificação 
 
 Implementação (ADR-0011): usuário → `usuario_grupo` → `grupo_papel` → `papel_permissao` → permissão (todos ativos), checada pela dependência `exigir(permissao)` em cada rota, sem cache. Perfis iniciais: Administrador, Gestor, Gestor do Cuidado, Navegador e Auditor; atribuição por `scripts.atribuir_grupo` (evento `role_change`). Negativas geram `access_denied`. Pacientes são acessados por UUID opaco (`id_publico`); o CPF só trafega no corpo da busca.
 
-## 8. Implantação (Docker)
-- Desenvolvimento: `db` no Docker (porta 127.0.0.1:5433, só com TLS), backend e frontend rodando no WSL.
-- Empacotamento (T01/T09, ADR-0013): serviços `edge`, `frontend`, `backend` e `tarefas` com usuário não-root, sistema de arquivos somente leitura e sem capabilities. Redes `borda`, `internal` e `dados` sem saída para a internet: o `frontend` não alcança o banco, só a API e as rotinas estão na rede `dados`. Apenas o `edge` é exposto (`https://cybersec.localhost:8443`).
-- Certificados: CA interna e um certificado por serviço (`infra/gerar_certificados.sh`), em `certs/`, fora do git.
-- Segredos: `.env` fora do git; `.env.example` versionado sem valores.
+## 8. Implantação
+- **Módulos** (ADR-0029): `frontend/`, `backend/` e `db/`, cada um com a própria imagem. Todas usam usuário não-root, sistema de arquivos somente leitura e nenhuma capability.
+- **AWS:**
+  - CloudFront e ALB terminam o TLS (ACM);
+  - frontend e backend são serviços ECS Fargate em subnets privadas: o ALB só alcança o frontend, e só o frontend alcança o backend (security groups);
+  - Aurora Serverless v2 com `rds.force_ssl=1`, acessado com `verify-full` e a CA do RDS embutida nas imagens;
+  - rotinas pelo EventBridge Scheduler e migrations como task avulsa.
+  
+  Requisitos de infraestrutura e variáveis por task estão no ADR-0029.
+- **Desenvolvimento** (`docker compose up`):
+  - `db` (Postgres 18, porta 127.0.0.1:5433, TLS obrigatório com certificado efêmero gerado no container), `backend`, `tarefas` e `frontend` (`http://localhost:3000`);
+  - as redes `api` e `dados` são internas: o frontend não alcança o banco;
+  - migrations com `docker compose run --rm migrar`.
+- **Segredos:** Secrets Manager na AWS; `.env` fora do git em dev; `.env.example` versionado sem valores.
 
 ## 9. Decisões de arquitetura (ADRs a criar em `/docs/adr`)
 | ADR | Decisão | Alternativa descartada |
