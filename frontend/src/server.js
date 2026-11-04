@@ -1,28 +1,40 @@
-import { readFileSync } from 'node:fs';
-import https from 'node:https';
-
 import { createApp } from './app.js';
+import { cabecalhoIp, normalizarOrigem, redesConfiaveis } from './proxy.js';
 
-const port = Number.parseInt(process.env.PORT ?? '3000', 10);
-const host = process.env.HOST ?? '127.0.0.1';
-const apiUrl = process.env.API_URL ?? 'http://127.0.0.1:8000';
-const proxyConfiavel = process.env.PROXY_CONFIAVEL;
-const { TLS_CERT: certificado, TLS_KEY: chave } = process.env;
+const env = process.env;
+const producao = env.NODE_ENV === 'production';
+const port = Number.parseInt(env.PORT ?? '3000', 10);
+const host = env.HOST ?? '127.0.0.1';
+const apiUrl = env.API_URL ?? 'http://127.0.0.1:8000';
+// TLS termina na borda (CloudFront + ALB com certificado ACM); entre o ALB e as tasks o tráfego
+// fica na VPC, restrito por security groups (RNF-05, ADR-0029). Em produção, essa condição tem
+// de ser declarada: sem ela, o processo não sobe, para nunca servir HTTP direto ao navegador.
+const tlsNaBorda = env.TLS_NA_BORDA === 'true';
 
-// TLS em toda comunicação (RNF-05, ADR-0013): sem certificado, só fora de produção.
-if (!(certificado && chave) && process.env.NODE_ENV === 'production') {
-  console.error('TLS_CERT e TLS_KEY são obrigatórios em produção.');
+function iniciar() {
+  if (producao && !tlsNaBorda) {
+    throw new Error('Em produção, defina TLS_NA_BORDA=true (TLS no CloudFront/ALB, ADR-0029).');
+  }
+  return createApp({
+    apiUrl,
+    https: tlsNaBorda,
+    origemPublica: normalizarOrigem(env.ORIGEM_PUBLICA, { exigirHttps: producao }),
+    confianca: {
+      redes: redesConfiaveis(env.PROXIES_CONFIAVEIS),
+      cabecalho: cabecalhoIp(env.IP_CLIENTE_HEADER),
+    },
+  });
+}
+
+let app;
+try {
+  app = iniciar();
+} catch (err) {
+  // Só a mensagem de configuração, escrita por nós: nenhum valor de variável é ecoado.
+  console.error(err.message);
   process.exit(1);
 }
 
-if (certificado && chave) {
-  const app = createApp({ apiUrl, proxyConfiavel, https: true });
-  const tls = { cert: readFileSync(certificado), key: readFileSync(chave), minVersion: 'TLSv1.2' };
-  https.createServer(tls, app).listen(port, host, () => {
-    console.log(`Frontend ouvindo em https://${host}:${port}`);
-  });
-} else {
-  createApp({ apiUrl, proxyConfiavel }).listen(port, host, () => {
-    console.log(`Frontend ouvindo em http://${host}:${port}`);
-  });
-}
+app.listen(port, host, () => {
+  console.log(`Frontend ouvindo em http://${host}:${port}`);
+});

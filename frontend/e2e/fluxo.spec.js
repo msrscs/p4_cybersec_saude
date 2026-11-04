@@ -732,8 +732,8 @@ test('dashboard: indicadores, gráficos, filtros e dados em tabela, no celular t
   await page.setViewportSize(original);
 });
 
-test('HTTPS, cookie de sessão protegido e CSRF: sem token a API recusa', async () => {
-  expect(new URL(page.url()).protocol).toBe('https:');
+// O HTTPS do navegador é verificado na borda (CloudFront/ALB, ADR-0029), fora deste ambiente.
+test('cookie de sessão protegido e CSRF: sem token a API recusa', async () => {
   const cookies = await page.context().cookies();
   const sessao = cookies.find((c) => c.name === '__Host-sessao');
   expect(sessao).toMatchObject({ secure: true, httpOnly: true, sameSite: 'Strict' });

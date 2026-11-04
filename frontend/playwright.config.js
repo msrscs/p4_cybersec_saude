@@ -20,9 +20,8 @@ export default defineConfig({
     trace: 'off', // traces guardariam CPF/senha de teste em disco
     screenshot: 'off',
     video: 'off',
-    // Confia só no certificado descartável deste teste (pela chave pública). Nunca usar
-    // ignoreHTTPSErrors: a verificação de TLS segue valendo para todo o resto.
-    launchOptions: { args: [`--ignore-certificate-errors-spki-list=${process.env.E2E_SPKI}`] },
+    // HTTP em localhost: o Chromium trata localhost como contexto seguro, então os cookies
+    // Secure/__Host- funcionam como em produção (onde o TLS termina na borda, ADR-0029).
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
 });

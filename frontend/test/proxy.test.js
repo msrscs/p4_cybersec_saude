@@ -3,7 +3,14 @@ import http from 'node:http';
 import { after, before, beforeEach, describe, it } from 'node:test';
 
 import { createApp } from '../src/app.js';
-import { ipDoCliente, reescreverCookie } from '../src/proxy.js';
+import {
+  cabecalhoIp,
+  ipDoCliente,
+  mesmaOrigem,
+  normalizarOrigem,
+  redesConfiaveis,
+  reescreverCookie,
+} from '../src/proxy.js';
 
 const UUID = '6f1c2a8e-1f0b-4c55-9d1e-2b4b9b6b7c11';
 
@@ -333,25 +340,104 @@ describe('repasse com backend fora do ar', () => {
 });
 
 describe('ipDoCliente', () => {
-  const req = (ip, xff) => ({
-    socket: { remoteAddress: ip },
-    headers: xff === undefined ? {} : { 'x-forwarded-for': xff },
+  const req = (ip, headers = {}) => ({ socket: { remoteAddress: ip }, headers });
+  const vpc = { redes: redesConfiaveis('10.0.0.0/16, 2001:db8::/32') };
+  const cloudfront = { ...vpc, cabecalho: 'cloudfront-viewer-address' };
+
+  it('sem redes confiáveis, vale a conexão', () => {
+    assert.equal(ipDoCliente(req('::ffff:10.0.0.9', { 'x-forwarded-for': '1.2.3.4' })), '10.0.0.9');
   });
 
-  it('sem proxy configurado, vale a conexão', () => {
-    assert.equal(ipDoCliente(req('::ffff:10.0.0.9', '1.2.3.4')), '10.0.0.9');
+  it('só aceita X-Forwarded-For vindo de rede confiável', () => {
+    assert.equal(ipDoCliente(req('10.0.3.7', { 'x-forwarded-for': '1.2.3.4' }), vpc), '1.2.3.4');
+    assert.equal(
+      ipDoCliente(req('::ffff:10.0.0.1', { 'x-forwarded-for': '2001:db8::1' }), vpc),
+      '2001:db8::1',
+    );
+    assert.equal(ipDoCliente(req('10.1.0.9', { 'x-forwarded-for': '1.2.3.4' }), vpc), '10.1.0.9');
+    assert.equal(
+      ipDoCliente(req('2001:db9::1', { 'x-forwarded-for': '1.2.3.4' }), vpc),
+      '2001:db9::1',
+    );
   });
 
-  it('só aceita X-Forwarded-For vindo do proxy configurado', () => {
-    assert.equal(ipDoCliente(req('10.0.0.1', '1.2.3.4'), '10.0.0.1'), '1.2.3.4');
-    assert.equal(ipDoCliente(req('::ffff:10.0.0.1', '2001:db8::1'), '10.0.0.1'), '2001:db8::1');
-    assert.equal(ipDoCliente(req('10.0.0.9', '1.2.3.4'), '10.0.0.1'), '10.0.0.9');
+  it('X-Forwarded-For com lista ou valor inválido cai no IP da conexão', () => {
+    for (const xff of ['1.2.3.4, 5.6.7.8', 'lixo', undefined]) {
+      const headers = xff === undefined ? {} : { 'x-forwarded-for': xff };
+      assert.equal(ipDoCliente(req('10.0.0.1', headers), vpc), '10.0.0.1');
+    }
   });
 
-  it('valor inválido do proxy cai no IP da conexão', () => {
-    assert.equal(ipDoCliente(req('10.0.0.1', '1.2.3.4, 5.6.7.8'), '10.0.0.1'), '10.0.0.1');
-    assert.equal(ipDoCliente(req('10.0.0.1', 'lixo'), '10.0.0.1'), '10.0.0.1');
-    assert.equal(ipDoCliente(req('10.0.0.1'), '10.0.0.1'), '10.0.0.1');
+  it('CloudFront-Viewer-Address: tira a porta, em IPv4 e IPv6', () => {
+    const cva = (valor) => req('10.0.1.5', { 'cloudfront-viewer-address': valor });
+    assert.equal(ipDoCliente(cva('203.0.113.9:46532'), cloudfront), '203.0.113.9');
+    assert.equal(ipDoCliente(cva('2001:db8:4::1:443'), cloudfront), '2001:db8:4::1');
+    for (const ruim of ['203.0.113.9', '203.0.113.9:', 'lixo:80', ':80', '1.2.3.4:999999']) {
+      assert.equal(ipDoCliente(cva(ruim), cloudfront), '10.0.1.5', ruim);
+    }
+  });
+
+  it('com CloudFront configurado, X-Forwarded-For do cliente é ignorado', () => {
+    const r = req('10.0.1.5', { 'x-forwarded-for': '1.2.3.4' });
+    assert.equal(ipDoCliente(r, cloudfront), '10.0.1.5');
+  });
+});
+
+describe('configuração de proxy e origem', () => {
+  it('redesConfiaveis aceita IPs e CIDRs; vazio é nenhuma', () => {
+    assert.equal(redesConfiaveis(''), null);
+    assert.equal(redesConfiaveis(undefined), null);
+    const redes = redesConfiaveis('172.30.10.10,10.0.0.0/16');
+    assert.ok(redes.check('172.30.10.10'));
+    assert.ok(!redes.check('172.30.10.11'));
+    assert.ok(redes.check('10.0.255.1'));
+  });
+
+  for (const ruim of [
+    '10.0.0.0/',
+    '10.0.0.0/33',
+    '0.0.0.0/0',
+    '::/0',
+    'lixo',
+    '10.0.0.0/8/1',
+    '10.0.0.0/x',
+  ]) {
+    it(`redesConfiaveis recusa ${ruim}`, () => {
+      assert.throws(() => redesConfiaveis(ruim), /PROXIES_CONFIAVEIS/);
+    });
+  }
+
+  it('cabecalhoIp só aceita os cabeçalhos conhecidos', () => {
+    assert.equal(cabecalhoIp(), 'x-forwarded-for');
+    assert.equal(cabecalhoIp('CloudFront-Viewer-Address'), 'cloudfront-viewer-address');
+    assert.throws(() => cabecalhoIp('x-real-ip'), /IP_CLIENTE_HEADER/);
+  });
+
+  it('normalizarOrigem exige só esquema + host, e HTTPS quando pedido', () => {
+    assert.equal(normalizarOrigem(undefined), null);
+    assert.equal(normalizarOrigem('https://Saude.Exemplo.gov.br'), 'https://saude.exemplo.gov.br');
+    assert.equal(normalizarOrigem('https://saude.exemplo.gov.br/'), 'https://saude.exemplo.gov.br');
+    assert.equal(
+      normalizarOrigem('http://localhost:3000', { exigirHttps: false }),
+      'http://localhost:3000',
+    );
+    for (const ruim of [
+      'http://saude.exemplo.gov.br',
+      'https://x.br/app',
+      'https://x.br?a=1',
+      'lixo',
+    ]) {
+      assert.throws(() => normalizarOrigem(ruim), /ORIGEM_PUBLICA/, ruim);
+    }
+  });
+
+  it('com origem pública, o Origin é comparado com ela e não com o Host', () => {
+    const publica = 'https://saude.exemplo.gov.br';
+    const req = (origin) => ({ headers: { origin, host: 'interno-alb.elb.amazonaws.com' } });
+    assert.ok(mesmaOrigem(req(publica), publica));
+    assert.ok(!mesmaOrigem(req('https://interno-alb.elb.amazonaws.com'), publica));
+    assert.ok(!mesmaOrigem(req('http://saude.exemplo.gov.br'), publica));
+    assert.ok(!mesmaOrigem(req('https://evil.example'), publica));
   });
 });
 

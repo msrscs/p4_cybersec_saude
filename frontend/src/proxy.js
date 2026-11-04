@@ -1,6 +1,6 @@
 // Repasse restrito do navegador para a API (ADR-0012). O backend não é exposto: o navegador
 // só fala com esta origem, e aqui passa apenas o que a API espera.
-import { isIP } from 'node:net';
+import { BlockList, isIP } from 'node:net';
 
 import express from 'express';
 
@@ -34,29 +34,97 @@ function erro(res, status, detail) {
   res.status(status).set('Cache-Control', 'no-store').json({ detail });
 }
 
-// IP da conexão TCP, salvo se ela vier do proxy de borda configurado (ADR-0013): ele substitui
-// o X-Forwarded-For enviado pelo navegador. De qualquer outro, o header é descartado.
-export function ipDoCliente(req, proxyConfiavel) {
+// Cabeçalhos que um proxy confiável pode usar para informar o IP do usuário (ADR-0029):
+// - x-forwarded-for: um único IP (proxy que substitui o valor enviado pelo navegador);
+// - cloudfront-viewer-address: "ip:porta", gerado pelo CloudFront (o navegador não o controla).
+const CABECALHOS_IP = new Set(['x-forwarded-for', 'cloudfront-viewer-address']);
+
+// Lista "IP ou CIDR" separada por vírgula, ex.: "10.0.0.0/16,10.1.0.0/16". Valor inválido
+// interrompe a inicialização: confiar em quem não devia falsificaria o IP da auditoria.
+export function redesConfiaveis(texto) {
+  const itens = String(texto ?? '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+  if (itens.length === 0) return null;
+  const redes = new BlockList();
+  for (const item of itens) {
+    const [endereco, prefixo, ...resto] = item.split('/');
+    const tipo = isIP(endereco);
+    const maximo = tipo === 6 ? 128 : 32;
+    const prefixoValido = prefixo === undefined || /^\d{1,3}$/.test(prefixo);
+    const bits = prefixo === undefined ? maximo : Number(prefixo);
+    // /0 confiaria em qualquer origem: o IP da auditoria passaria a ser escolhido pelo cliente.
+    if (!tipo || resto.length || !prefixoValido || bits === 0 || bits > maximo) {
+      throw new Error('PROXIES_CONFIAVEIS inválido: use IPs ou CIDRs separados por vírgula.');
+    }
+    redes.addSubnet(endereco, bits, tipo === 6 ? 'ipv6' : 'ipv4');
+  }
+  return redes;
+}
+
+export function cabecalhoIp(nome = 'x-forwarded-for') {
+  const valor = String(nome).trim().toLowerCase();
+  if (!CABECALHOS_IP.has(valor)) {
+    throw new Error(`IP_CLIENTE_HEADER deve ser um de: ${[...CABECALHOS_IP].join(', ')}.`);
+  }
+  return valor;
+}
+
+function ipInformado(valor, cabecalho) {
+  const texto = String(valor ?? '').trim();
+  if (cabecalho === 'x-forwarded-for') return isIP(texto) ? texto : null;
+  // cloudfront-viewer-address: o que vem depois do último ":" é a porta, também em IPv6.
+  const separador = texto.lastIndexOf(':');
+  if (separador < 1 || !/^\d{1,5}$/.test(texto.slice(separador + 1))) return null;
+  const ip = texto.slice(0, separador);
+  return isIP(ip) ? ip : null;
+}
+
+// IP da conexão TCP, salvo se ela vier de um proxy confiável (ADR-0013, ADR-0029): então vale o
+// IP que ele informa no cabeçalho configurado. De qualquer outro, o cabeçalho é ignorado.
+export function ipDoCliente(req, { redes = null, cabecalho = 'x-forwarded-for' } = {}) {
   const conexao = (req.socket.remoteAddress ?? '').replace(/^::ffff:/, '');
-  if (!proxyConfiavel || conexao !== proxyConfiavel) return conexao;
-  const informado = String(req.headers['x-forwarded-for'] ?? '').trim();
-  return isIP(informado) ? informado : conexao;
+  const tipo = isIP(conexao);
+  if (!redes || !tipo || !redes.check(conexao, tipo === 6 ? 'ipv6' : 'ipv4')) return conexao;
+  return ipInformado(req.headers[cabecalho], cabecalho) ?? conexao;
 }
 
 // CSRF, 1ª camada (ADR-0013): só a própria origem altera dados. Vale também para login e MFA,
 // que ainda não têm o token CSRF da sessão. Sem nenhum dos dois headers, não veio de navegador
-// atual: recusa, porque o repasse só atende as telas.
-export function mesmaOrigem(req) {
+// atual: recusa, porque o repasse só atende as telas. Atrás de CDN/balanceador o Host que chega
+// aqui pode não ser o do navegador: com ORIGEM_PUBLICA, o Origin é comparado com ela (ADR-0029).
+export function mesmaOrigem(req, origemPublica = null) {
   const site = req.headers['sec-fetch-site'];
   const origem = req.headers.origin;
   if (site === undefined && origem === undefined) return false;
   if (site !== undefined && site !== 'same-origin') return false;
   if (origem === undefined) return true;
   try {
-    return new URL(origem).host === req.headers.host;
+    const url = new URL(origem);
+    return origemPublica ? url.origin === origemPublica : url.host === req.headers.host;
   } catch {
     return false;
   }
+}
+
+// "https://saude.exemplo.gov.br" -> origem normalizada; caminho, query ou HTTP fora de dev: erro.
+export function normalizarOrigem(texto, { exigirHttps = true } = {}) {
+  if (!texto) return null;
+  let url;
+  try {
+    url = new URL(texto);
+  } catch {
+    throw new Error('ORIGEM_PUBLICA inválida.');
+  }
+  const soOrigem = url.pathname === '/' && !url.search && !url.hash && !url.username;
+  if (!soOrigem || !['https:', 'http:'].includes(url.protocol)) {
+    throw new Error('ORIGEM_PUBLICA deve ser só esquema + host, ex.: https://saude.exemplo.gov.br');
+  }
+  if (exigirHttps && url.protocol !== 'https:') {
+    throw new Error('ORIGEM_PUBLICA deve usar https.');
+  }
+  return url.origin;
 }
 
 // O backend define o cookie de pré-autenticação em /auth/mfa; aqui a API mora em /api.
@@ -68,7 +136,8 @@ export function createApiProxy({
   apiUrl,
   timeoutMs = 10_000,
   maxBodyBytes = 64 * 1024,
-  proxyConfiavel = null,
+  confianca = {},
+  origemPublica = null,
 }) {
   const router = express.Router();
   const base = new URL(apiUrl);
@@ -78,7 +147,7 @@ export function createApiProxy({
       erro(res, 404, 'Não encontrado.');
       return;
     }
-    if (req.method !== 'GET' && !mesmaOrigem(req)) {
+    if (req.method !== 'GET' && !mesmaOrigem(req, origemPublica)) {
       erro(res, 403, 'Requisição recusada.');
       return;
     }
@@ -96,7 +165,7 @@ export function createApiProxy({
   router.use(async (req, res) => {
     const headers = {
       accept: 'application/json',
-      'x-forwarded-for': ipDoCliente(req, proxyConfiavel),
+      'x-forwarded-for': ipDoCliente(req, confianca),
     };
     if (req.headers.cookie) headers.cookie = req.headers.cookie;
     if (req.headers[CABECALHO_CSRF]) headers[CABECALHO_CSRF] = req.headers[CABECALHO_CSRF];

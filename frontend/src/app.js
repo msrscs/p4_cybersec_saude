@@ -11,7 +11,8 @@ const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 
 export function createApp({
   apiUrl = 'http://127.0.0.1:8000',
   apiTimeoutMs,
-  proxyConfiavel,
+  confianca,
+  origemPublica,
   https = false,
 } = {}) {
   const app = express();
@@ -35,7 +36,8 @@ export function createApp({
           // Trusted Types: o navegador recusa atribuir texto a innerHTML e afins (I6).
           requireTrustedTypesFor: ["'script'"],
           trustedTypes: ["'none'"],
-          // Só com TLS: em http://localhost (dev) quebraria as chamadas da própria página.
+          // Só quando o navegador chega por HTTPS (TLS na borda, ADR-0029): em http://localhost
+          // (dev) quebraria as chamadas da própria página.
           ...(https ? { upgradeInsecureRequests: [] } : {}),
         },
       },
@@ -60,7 +62,7 @@ export function createApp({
     res.json({ status: 'ok' });
   });
 
-  app.use('/api', createApiProxy({ apiUrl, timeoutMs: apiTimeoutMs, proxyConfiavel }));
+  app.use('/api', createApiProxy({ apiUrl, timeoutMs: apiTimeoutMs, confianca, origemPublica }));
 
   app.use(
     express.static(publicDir, {
