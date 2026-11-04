@@ -1,7 +1,7 @@
 """Validade da senha temporária (T10, ADR-0028).
 
-A senha gerada pelo sistema, no cadastro ou no reset, deixa de valer depois do prazo. Quem já está com
-uma pendente ganha o prazo a partir de agora: não há como saber quando ela foi gerada.
+A senha gerada pelo sistema, no cadastro ou no reset, deixa de valer depois do prazo. Quem já está
+com uma pendente ganha o prazo a partir de agora: não há como saber quando ela foi gerada.
 """
 
 from collections.abc import Sequence
