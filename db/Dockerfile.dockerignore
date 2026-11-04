@@ -1,0 +1,14 @@
+# Contexto de build é a raiz do repositório: entra só o que a imagem do banco usa (lista branca).
+# Nada de .env, certificados, backups ou dumps.
+*
+!alembic.ini
+!backend/pyproject.toml
+!backend/uv.lock
+!backend/.python-version
+!backend/app
+!backend/scripts/__init__.py
+!backend/scripts/bootstrap_db.py
+!backend/scripts/importar_cid.py
+!db/migrations
+!db/seeds
+**/__pycache__
