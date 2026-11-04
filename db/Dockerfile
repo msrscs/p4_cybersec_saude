@@ -9,7 +9,7 @@
 #   python -m scripts.bootstrap_db       (1x; usuário mestre do Aurora: POSTGRES_USER/PASSWORD)
 #   python -m scripts.importar_cid       (catálogo CID; usa as chaves da aplicação)
 
-FROM ghcr.io/astral-sh/uv:0.13.6 AS uv
+FROM ghcr.io/astral-sh/uv:0.13.7 AS uv
 
 FROM python:3.14-slim AS build
 COPY --from=uv /uv /usr/local/bin/uv
